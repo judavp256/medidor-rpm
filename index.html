@@ -13,24 +13,51 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     body { font-family: 'Inter', sans-serif; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background-color: white !important; }
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
 
-  <!-- Header -->
-  <header class="bg-slate-900 text-white shadow-md">
+  <!-- PANTALLA DE ACCESO POR CONTRASEÑA -->
+  <div id="loginScreen" class="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center space-y-5">
+      <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto text-3xl">
+        🔒
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold text-slate-800">Acceso al Medidor de RPM</h2>
+        <p class="text-xs text-slate-500 mt-1">Plataforma técnica de análisis espectral de vibraciones</p>
+      </div>
+      <div class="space-y-3">
+        <input type="password" id="passwordInput" placeholder="Ingresa la contraseña" 
+          class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none text-center">
+        <button id="btnLogin" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl transition shadow-sm">
+          Ingresar a la Plataforma
+        </button>
+        <p id="loginError" class="hidden text-xs text-rose-600 font-medium">Contraseña incorrecta. Intenta nuevamente.</p>
+        <p class="text-[11px] text-slate-400">Contraseña por defecto: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-600">tecnico2026</code></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header Principal -->
+  <header class="bg-slate-900 text-white shadow-md no-print">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
       <div class="flex items-center gap-3">
         <span class="text-3xl">⚙️</span>
         <div>
           <h1 class="text-xl font-bold tracking-tight">Tacómetro Digital por Vibración con Validación</h1>
-          <p class="text-xs text-slate-400">Promedio de 3 Mediciones y Prueba con Carga | GitHub Pages (100% en Navegador)</p>
+          <p class="text-xs text-slate-400">4 Gráficos FFT Independientes, Rango Configurable e Informe Técnico</p>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-3">
         <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-700">
-          🔒 100% Privado (Cero Datos en Servidores)
+          🔒 100% Volátil (Cero Datos en Servidores)
         </span>
+        <button id="btnLogout" class="text-xs text-slate-400 hover:text-white underline">Cerrar Sesión</button>
       </div>
     </div>
   </header>
@@ -39,7 +66,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
       <!-- Panel Lateral de Configuración -->
-      <div class="lg:col-span-1 bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+      <div class="lg:col-span-1 bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4 no-print">
         <h2 class="text-base font-semibold text-slate-800 flex items-center gap-2">
           <span>🔧</span> Parámetros del Equipo
         </h2>
@@ -52,14 +79,16 @@
         </div>
 
         <div class="border-t border-slate-100 pt-3">
-          <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia Muestreo (Fs) [Hz]</label>
-          <input type="number" id="fsInput" value="11628" step="100" min="100"
-            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia máx. visualización [Hz]</label>
+          <!-- CASILLA DE RANGO DE FRECUENCIA - PREDETERMINADO EN 200 Hz -->
+          <input type="number" id="freqplotInput" value="200" step="20" min="20" max="5000"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <p class="text-[10px] text-slate-400 mt-0.5">Predeterminado en 200 Hz como en el código</p>
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia máx. visualización [Hz]</label>
-          <input type="number" id="freqplotInput" value="200" step="20" min="20"
+          <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia Muestreo (Fs) [Hz]</label>
+          <input type="number" id="fsInput" value="11628" step="100" min="100"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
         </div>
 
@@ -82,36 +111,48 @@
 
         <div class="border-t border-slate-100 pt-3">
           <button id="btnDemo" class="w-full py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition border border-blue-200 flex items-center justify-center gap-1.5">
-            <span>🧪</span> Cargar Demo Completa (Vacío + Carga)
+            <span>🧪</span> Cargar Demo Completa
           </button>
         </div>
       </div>
 
-      <!-- Área de Contenido y Resultados -->
+      <!-- Área de Contenido Principal -->
       <div class="lg:col-span-3 space-y-5">
 
-        <!-- Zonas de Carga (Vacío y Carga) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- 1. Ensayos en Vacío (3 archivos) -->
-          <div id="dropZoneBase" class="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/40 p-5 rounded-xl text-center cursor-pointer transition">
-            <input type="file" id="fileInputBase" accept=".csv,.txt" multiple class="hidden">
-            <div class="flex flex-col items-center justify-center gap-1.5">
-              <span class="text-2xl">📁</span>
-              <p class="text-xs font-bold text-slate-800">1️⃣ Sube las 3 Mediciones en Vacío</p>
-              <p class="text-[11px] text-slate-500">Arrastra o selecciona los 3 archivos CSV</p>
+        <!-- 4 SLOTS DE CARGA FLEXIBLES (NO RESTRICTIVOS) -->
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 no-print">
+          <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <span>📁</span> Carga de Archivos (Flexible: Sube 1, 2, 3 o los 4 ensayos)
+          </h3>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <!-- Slot 1 -->
+            <div class="border border-slate-200 hover:border-blue-500 bg-slate-50 p-3 rounded-lg cursor-pointer" onclick="document.getElementById('slotFile1').click()">
+              <input type="file" id="slotFile1" accept=".csv,.txt" class="hidden" onchange="handleSingleSlot(this, 1, 'vacio')">
+              <span class="text-lg">1️⃣</span>
+              <p class="text-[11px] font-bold text-slate-700">Vacío 1 (Base)</p>
+              <p id="labelSlot1" class="text-[10px] text-slate-400 mt-1">Sin archivo</p>
             </div>
-            <p id="fileInfoBase" class="hidden mt-2 text-[11px] font-semibold text-blue-700 bg-blue-100 py-1 px-2.5 rounded-md inline-block"></p>
-          </div>
-
-          <!-- 2. Ensayo con Carga (1 archivo) -->
-          <div id="dropZoneCarga" class="border-2 border-dashed border-rose-300 hover:border-rose-500 bg-rose-50/40 p-5 rounded-xl text-center cursor-pointer transition">
-            <input type="file" id="fileInputCarga" accept=".csv,.txt" class="hidden">
-            <div class="flex flex-col items-center justify-center gap-1.5">
-              <span class="text-2xl">🚨</span>
-              <p class="text-xs font-bold text-slate-800">2️⃣ Sube la Medición CON CARGA (Opcional)</p>
-              <p class="text-[11px] text-slate-500">Ejemplo: agua en licuadora o freno ligero</p>
+            <!-- Slot 2 -->
+            <div class="border border-slate-200 hover:border-blue-500 bg-slate-50 p-3 rounded-lg cursor-pointer" onclick="document.getElementById('slotFile2').click()">
+              <input type="file" id="slotFile2" accept=".csv,.txt" class="hidden" onchange="handleSingleSlot(this, 2, 'vacio')">
+              <span class="text-lg">2️⃣</span>
+              <p class="text-[11px] font-bold text-slate-700">Vacío 2 (Opcional)</p>
+              <p id="labelSlot2" class="text-[10px] text-slate-400 mt-1">Sin archivo</p>
             </div>
-            <p id="fileInfoCarga" class="hidden mt-2 text-[11px] font-semibold text-rose-700 bg-rose-100 py-1 px-2.5 rounded-md inline-block"></p>
+            <!-- Slot 3 -->
+            <div class="border border-slate-200 hover:border-blue-500 bg-slate-50 p-3 rounded-lg cursor-pointer" onclick="document.getElementById('slotFile3').click()">
+              <input type="file" id="slotFile3" accept=".csv,.txt" class="hidden" onchange="handleSingleSlot(this, 3, 'vacio')">
+              <span class="text-lg">3️⃣</span>
+              <p class="text-[11px] font-bold text-slate-700">Vacío 3 (Opcional)</p>
+              <p id="labelSlot3" class="text-[10px] text-slate-400 mt-1">Sin archivo</p>
+            </div>
+            <!-- Slot 4 -->
+            <div class="border border-rose-200 hover:border-rose-500 bg-rose-50/50 p-3 rounded-lg cursor-pointer" onclick="document.getElementById('slotFile4').click()">
+              <input type="file" id="slotFile4" accept=".csv,.txt" class="hidden" onchange="handleSingleSlot(this, 4, 'carga')">
+              <span class="text-lg">🚨</span>
+              <p class="text-[11px] font-bold text-rose-700">Con Carga / Freno</p>
+              <p id="labelSlot4" class="text-[10px] text-slate-400 mt-1">Sin archivo</p>
+            </div>
           </div>
         </div>
 
@@ -136,47 +177,90 @@
           </div>
 
           <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-purple-500 border border-slate-200 text-center">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">🔍 Coherencia</div>
-            <div id="kpiCoherencia" class="text-2xl sm:text-3xl font-bold text-purple-600 my-1">--</div>
-            <div class="text-xs text-slate-500">Ensayos coincidentes</div>
+            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">📁 Ensayos Activos</div>
+            <div id="kpiEnsayosActivos" class="text-2xl sm:text-3xl font-bold text-purple-600 my-1">0 / 4</div>
+            <div class="text-xs text-slate-500">Archivos cargados</div>
           </div>
         </div>
 
         <!-- Banner de Diagnóstico y Validación con Carga -->
         <div id="statusBanner" class="hidden p-4 rounded-xl border text-sm font-medium"></div>
 
-        <!-- Gráfico del Espectro Plotly -->
+        <!-- LOS 4 GRÁFICOS DE TRANSFORMADAS FFT INDIVIDUALES -->
         <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-slate-200">
-          <div class="flex justify-between items-center mb-2">
+          <div class="flex justify-between items-center mb-3">
             <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-              <span>📈</span> Superposición de Espectros FFT (Vacío vs Carga)
+              <span>📈</span> Gráficos de las Transformadas de Fourier (FFT) Individuales
             </h3>
-            <span class="text-xs text-slate-400">Interactivo: zoom y cursor</span>
+            <span class="text-xs text-slate-400">Rango: 0 a <span id="labelRangoFreq">200</span> Hz</span>
           </div>
-          <div id="spectrumPlot" class="w-full h-80 sm:h-96"></div>
+
+          <!-- Cuadrícula 2x2 para los 4 gráficos -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="gridGraficos">
+            <div class="border border-slate-100 rounded-lg p-2 text-center text-slate-400 py-12" id="slotPlotBox1">
+              Slot 1: Sin datos cargados
+            </div>
+            <div class="border border-slate-100 rounded-lg p-2 text-center text-slate-400 py-12" id="slotPlotBox2">
+              Slot 2: Sin datos cargados
+            </div>
+            <div class="border border-slate-100 rounded-lg p-2 text-center text-slate-400 py-12" id="slotPlotBox3">
+              Slot 3: Sin datos cargados
+            </div>
+            <div class="border border-slate-100 rounded-lg p-2 text-center text-slate-400 py-12" id="slotPlotBox4">
+              Slot 4: Sin datos cargados
+            </div>
+          </div>
         </div>
 
-        <!-- Tabla Comparativa de Ensayos -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-          <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-1.5">
-            <span>📋</span> Comparativo de Mediciones Realizadas
-          </h3>
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-xs text-left">
-              <thead class="bg-slate-50 text-slate-500 font-semibold border-b">
-                <tr>
-                  <th class="py-2.5 px-3">Ensayo</th>
-                  <th class="py-2.5 px-3">Nombre Archivo</th>
-                  <th class="py-2.5 px-3">Frecuencia 1X [Hz]</th>
-                  <th class="py-2.5 px-3">RPM Medida</th>
-                  <th class="py-2.5 px-3">Amplitud 1X</th>
-                  <th class="py-2.5 px-3">Vibración RMS [m/s²]</th>
-                </tr>
-              </thead>
-              <tbody id="tablaEnsayosBody" class="divide-y divide-slate-100">
-                <tr><td colspan="6" class="py-4 text-center text-slate-400">Carga los archivos para ver la comparativa de ensayos</td></tr>
-              </tbody>
-            </table>
+        <!-- FORMULARIO DE INFORME TÉCNICO OFICIAL (Formato_IT) -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+              <span>📄</span> Generación de Informe Técnico Oficial (Formato_IT)
+            </h3>
+            <button onclick="window.print()" class="no-print px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold transition">
+              🖨️ Imprimir / Guardar como PDF
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block font-medium text-slate-600 mb-0.5">Proyecto / Iniciativa:</label>
+              <input type="text" id="infProyecto" value="Evaluación Operacional de RPM por Vibraciones" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-0.5">Referencia / Modelo:</label>
+              <input type="text" id="infReferencia" value="LIC-600W-2026" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-0.5">Categoría de Producto:</label>
+              <input type="text" id="infCategoria" value="Refrigeración / Electrodomésticos" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-0.5">Centro de Costo:</label>
+              <input type="text" id="infCentroCosto" value="Mantenimiento y Calidad" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3 text-xs border-t pt-3">
+            <div>
+              <label class="block font-medium text-slate-600 mb-0.5">Realizó (Técnico):</label>
+              <input type="text" id="infRealizo" value="Técnico de Ensayos" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-0.5">Revisó (Ingeniero):</label>
+              <input type="text" id="infReviso" value="Ing. Especialista Vibraciones" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-0.5">Aprobó (Líder Técnico):</label>
+              <input type="text" id="infAprobo" value="Director de Laboratorio" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
+            </div>
+          </div>
+
+          <div class="text-right pt-2 no-print">
+            <button id="btnDescargarLatex" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold transition">
+              📥 Descargar Código Fuente LaTeX (.tex)
+            </button>
           </div>
         </div>
 
@@ -185,18 +269,42 @@
   </main>
 
   <script>
-    // Variables globales
-    let ensayosBase = [];
-    let ensayoCarga = null;
+    // 1. SISTEMA DE AUTENTICACIÓN
+    const PASSWORD_APP = "tecnico2026";
+    const loginScreen = document.getElementById('loginScreen');
+    const passwordInput = document.getElementById('passwordInput');
+    const btnLogin = document.getElementById('btnLogin');
+    const loginError = document.getElementById('loginError');
+    const btnLogout = document.getElementById('btnLogout');
 
-    // DOM Elements
-    const dropZoneBase = document.getElementById('dropZoneBase');
-    const fileInputBase = document.getElementById('fileInputBase');
-    const fileInfoBase = document.getElementById('fileInfoBase');
+    if (sessionStorage.getItem('autenticado') === 'true') {
+      loginScreen.classList.add('hidden');
+    }
 
-    const dropZoneCarga = document.getElementById('dropZoneCarga');
-    const fileInputCarga = document.getElementById('fileInputCarga');
-    const fileInfoCarga = document.getElementById('fileInfoCarga');
+    btnLogin.addEventListener('click', () => {
+      if (passwordInput.value === PASSWORD_APP) {
+        sessionStorage.setItem('autenticado', 'true');
+        loginScreen.classList.add('hidden');
+      } else {
+        loginError.classList.remove('hidden');
+      }
+    });
+    passwordInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') btnLogin.click();
+    });
+
+    btnLogout.addEventListener('click', () => {
+      sessionStorage.removeItem('autenticado');
+      window.location.reload();
+    });
+
+    // 2. ESTADO GLOBAL
+    let slotsData = {
+      1: null,
+      2: null,
+      3: null,
+      4: null
+    };
 
     const rpmNominalInput = document.getElementById('rpmNominal');
     const fRotLabel = document.getElementById('fRotLabel');
@@ -205,133 +313,97 @@
     const toleranciaInput = document.getElementById('toleranciaInput');
     const sensibilidadInput = document.getElementById('sensibilidadInput');
     const sensibilidadVal = document.getElementById('sensibilidadVal');
+    const labelRangoFreq = document.getElementById('labelRangoFreq');
     const btnDemo = document.getElementById('btnDemo');
 
     function updateFRot() {
       const rpm = parseFloat(rpmNominalInput.value) || 0;
       fRotLabel.textContent = (rpm / 60.0).toFixed(2) + ' Hz';
-      processAll();
+      labelRangoFreq.textContent = freqplotInput.value;
+      recalcularTodo();
     }
     rpmNominalInput.addEventListener('input', updateFRot);
-    fsInput.addEventListener('input', processAll);
-    freqplotInput.addEventListener('input', processAll);
-    toleranciaInput.addEventListener('input', processAll);
+    fsInput.addEventListener('input', recalcularTodo);
+    freqplotInput.addEventListener('input', updateFRot);
+    toleranciaInput.addEventListener('input', recalcularTodo);
     sensibilidadInput.addEventListener('input', (e) => {
       sensibilidadVal.textContent = e.target.value + '%';
-      processAll();
+      recalcularTodo();
     });
 
-    // Gestión Archivos Base (Vacío)
-    dropZoneBase.addEventListener('click', () => fileInputBase.click());
-    dropZoneBase.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneBase.classList.add('bg-blue-100'); });
-    dropZoneBase.addEventListener('dragleave', () => { dropZoneBase.classList.remove('bg-blue-100'); });
-    dropZoneBase.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZoneBase.classList.remove('bg-blue-100');
-      if (e.dataTransfer.files.length > 0) handleMultipleFiles(Array.from(e.dataTransfer.files), 'base');
-    });
-    fileInputBase.addEventListener('change', (e) => {
-      if (e.target.files.length > 0) handleMultipleFiles(Array.from(e.target.files), 'base');
-    });
-
-    // Gestión Archivo con Carga
-    dropZoneCarga.addEventListener('click', () => fileInputCarga.click());
-    dropZoneCarga.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneCarga.classList.add('bg-rose-100'); });
-    dropZoneCarga.addEventListener('dragleave', () => { dropZoneCarga.classList.remove('bg-rose-100'); });
-    dropZoneCarga.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZoneCarga.classList.remove('bg-rose-100');
-      if (e.dataTransfer.files.length > 0) handleMultipleFiles([e.dataTransfer.files[0]], 'carga');
-    });
-    fileInputCarga.addEventListener('change', (e) => {
-      if (e.target.files.length > 0) handleMultipleFiles([e.target.files[0]], 'carga');
-    });
-
-    // Parseador múltiple de CSV con PapaParse (100% en memoria de cliente)
-    function handleMultipleFiles(files, tipo) {
-      if (tipo === 'base') {
-        ensayosBase = [];
-        fileInfoBase.textContent = `Procesando ${files.length} archivo(s)...`;
-        fileInfoBase.classList.remove('hidden');
-      } else {
-        ensayoCarga = null;
-        fileInfoCarga.textContent = `Procesando ${files[0].name}...`;
-        fileInfoCarga.classList.remove('hidden');
-      }
-
-      let readCount = 0;
-      files.forEach((f, idx) => {
-        Papa.parse(f, {
-          dynamicTyping: true,
-          skipEmptyLines: true,
-          complete: function(res) {
-            if (res.data && res.data.length > 0) {
-              let startRow = isNaN(Number(res.data[0][0])) ? 1 : 0;
-              const col = [];
-              for (let i = startRow; i < res.data.length; i++) {
-                const val = parseFloat(res.data[i][0]);
-                if (!isNaN(val)) col.push(val);
-              }
-              if (col.length >= 10) {
-                if (tipo === 'base') {
-                  ensayosBase.push({ nombre: f.name, data: new Float64Array(col) });
-                } else {
-                  ensayoCarga = { nombre: f.name, data: new Float64Array(col) };
-                }
-              }
+    // Manejo de slots individuales
+    function handleSingleSlot(input, slotNumber, tipo) {
+      if (!input.files || input.files.length === 0) return;
+      const file = input.files[0];
+      Papa.parse(file, {
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: function(res) {
+          if (res.data && res.data.length > 0) {
+            let startRow = isNaN(Number(res.data[0][0])) ? 1 : 0;
+            const col = [];
+            for (let i = startRow; i < res.data.length; i++) {
+              const val = parseFloat(res.data[i][0]);
+              if (!isNaN(val)) col.push(val);
             }
-            readCount++;
-            if (readCount === files.length) {
-              if (tipo === 'base') {
-                fileInfoBase.textContent = `✅ ${ensayosBase.length} ensayo(s) cargado(s)`;
-              } else {
-                fileInfoCarga.textContent = `✅ ${ensayoCarga ? ensayoCarga.nombre : 'Error al cargar'}`;
-              }
-              processAll();
+            if (col.length >= 10) {
+              slotsData[slotNumber] = {
+                nombre: file.name,
+                tipo: tipo,
+                slot: slotNumber,
+                data: new Float64Array(col)
+              };
+              document.getElementById(`labelSlot${slotNumber}`).textContent = file.name.substring(0, 16) + '...';
+              document.getElementById(`labelSlot${slotNumber}`).classList.add('text-emerald-600', 'font-semibold');
+              recalcularTodo();
             }
           }
-        });
+        }
       });
     }
 
-    // Botón Demo Completa
+    // Demo
     btnDemo.addEventListener('click', () => {
       const fs = parseFloat(fsInput.value) || 11628;
       const L = Math.floor(fs * 1.5);
-      const f_reales = [29.14, 29.16, 29.13]; // ~1748 RPM
+      const f_reales = [29.14, 29.16, 29.13];
 
-      ensayosBase = f_reales.map((fr, idx) => {
+      f_reales.forEach((fr, i) => {
         const d = new Float64Array(L);
-        for (let i = 0; i < L; i++) {
-          const t = i / fs;
-          d[i] = 0.45 * Math.sin(2 * Math.PI * fr * t)
-               + 0.18 * Math.sin(2 * Math.PI * 2 * fr * t)
-               + 0.08 * Math.sin(2 * Math.PI * 3 * fr * t)
-               + 0.04 * (Math.random() - 0.5);
+        for (let j = 0; j < L; j++) {
+          const t = j / fs;
+          d[j] = 0.45 * Math.sin(2 * Math.PI * fr * t) + 0.18 * Math.sin(2 * Math.PI * 2 * fr * t) + 0.08 * Math.sin(2 * Math.PI * 3 * fr * t) + 0.04 * (Math.random() - 0.5);
         }
-        return { nombre: `Demo_Vacio_Ensayo_${idx + 1}.csv`, data: d };
+        slotsData[i + 1] = {
+          nombre: `Demo_Vacio_${i + 1}.csv`,
+          tipo: 'vacio',
+          slot: i + 1,
+          data: d
+        };
+        document.getElementById(`labelSlot${i + 1}`).textContent = `Demo_${i + 1}.csv`;
+        document.getElementById(`labelSlot${i + 1}`).classList.add('text-emerald-600', 'font-semibold');
       });
 
-      // Simulación con carga (cae a 27.0 Hz = 1620 RPM)
-      const d_carga = new Float64Array(L);
+      // Con Carga
+      const d_c = new Float64Array(L);
       const f_c = 27.0;
-      for (let i = 0; i < L; i++) {
-        const t = i / fs;
-        d_carga[i] = 0.38 * Math.sin(2 * Math.PI * f_c * t)
-                  + 0.22 * Math.sin(2 * Math.PI * 2 * f_c * t)
-                  + 0.05 * (Math.random() - 0.5);
+      for (let j = 0; j < L; j++) {
+        const t = j / fs;
+        d_c[j] = 0.38 * Math.sin(2 * Math.PI * f_c * t) + 0.22 * Math.sin(2 * Math.PI * 2 * f_c * t) + 0.05 * (Math.random() - 0.5);
       }
-      ensayoCarga = { nombre: 'Demo_Con_Carga_Agua.csv', data: d_carga };
+      slotsData[4] = {
+        nombre: 'Demo_Carga_Agua.csv',
+        tipo: 'carga',
+        slot: 4,
+        data: d_c
+      };
+      document.getElementById('labelSlot4').textContent = 'Demo_Carga.csv';
+      document.getElementById('labelSlot4').classList.add('text-rose-600', 'font-semibold');
 
-      fileInfoBase.textContent = `✅ 3 ensayos base simulados`;
-      fileInfoBase.classList.remove('hidden');
-      fileInfoCarga.textContent = `✅ Ensayo con carga simulado (1620 RPM)`;
-      fileInfoCarga.classList.remove('hidden');
-
-      processAll();
+      recalcularTodo();
     });
 
-    // FFT Cooley-Tukey Radix-2
+    // FFT Cooley-Tukey
     function nextPowerOfTwo(n) {
       let p = 1;
       while (p < n) p <<= 1;
@@ -380,42 +452,37 @@
       }
     }
 
-    function computeFFTAndRMS(dataArr, fs, freqplot) {
+    function computeFFT(dataArr, fs, freqplot) {
       const L = dataArr.length;
       let sum = 0;
       for (let i = 0; i < L; i++) sum += dataArr[i];
       const mean = sum / L;
-      let sumSqDiff = 0;
-      for (let i = 0; i < L; i++) sumSqDiff += (dataArr[i] - mean) ** 2;
-      const rms = Math.sqrt(sumSqDiff / (L - 1));
+      let sumSq = 0;
+      for (let i = 0; i < L; i++) sumSq += (dataArr[i] - mean) ** 2;
+      const rms = Math.sqrt(sumSq / (L - 1));
 
       const NFFT = nextPowerOfTwo(L);
       const real = new Float64Array(NFFT);
       const imag = new Float64Array(NFFT);
       for (let i = 0; i < L; i++) real[i] = dataArr[i];
-
       fftRadix2(real, imag);
 
       const halfN = NFFT / 2;
       const fPlot = [];
-      const spectrumPlot = [];
-      let maxAmp = 0;
-
+      const espPlot = [];
+      let maxA = 0;
       for (let i = 0; i <= halfN; i++) {
         const f = (fs / 2) * (i / halfN);
         if (f > freqplot) break;
         const mag = (2 * Math.sqrt(real[i] * real[i] + imag[i] * imag[i])) / L;
         fPlot.push(f);
-        spectrumPlot.push(mag);
-        if (mag > maxAmp) maxAmp = mag;
+        espPlot.push(mag);
+        if (mag > maxA) maxA = mag;
       }
-      return { fPlot, spectrumPlot, rms, maxAmp };
+      return { fPlot, espPlot, rms, maxA };
     }
 
-    // Procesamiento General
-    function processAll() {
-      if (ensayosBase.length === 0) return;
-
+    function recalcularTodo() {
       const fs = parseFloat(fsInput.value) || 11628;
       const rpmNominal = parseFloat(rpmNominalInput.value) || 1750;
       const fRot = rpmNominal / 60.0;
@@ -423,207 +490,171 @@
       const tolHz = parseFloat(toleranciaInput.value) || 1.5;
       const sensPct = (parseFloat(sensibilidadInput.value) || 10) / 100.0;
 
-      const traces = [];
-      const coloresBase = ['#2563eb', '#0284c7', '#0d9488', '#6366f1'];
-      const resultados = [];
+      labelRangoFreq.textContent = freqplot;
 
-      // Procesar cada ensayo base
-      ensayosBase.forEach((item, idx) => {
-        const { fPlot, spectrumPlot, rms, maxAmp } = computeFFTAndRMS(item.data, fs, freqplot);
+      const resultadosVacios = [];
+      let resCarga = null;
+      let totalActivos = 0;
+
+      // Procesar cada slot (1 al 4)
+      for (let s = 1; s <= 4; s++) {
+        const slotObj = slotsData[s];
+        const box = document.getElementById(`slotPlotBox${s}`);
+
+        if (!slotObj) {
+          box.innerHTML = `<div class="py-12 text-slate-400">Slot ${s}: Sin datos cargados</div>`;
+          continue;
+        }
+
+        totalActivos++;
+        const { fPlot, espPlot, rms, maxA } = computeFFT(slotObj.data, fs, freqplot);
 
         // Picos
-        const minPeakHeight = maxAmp * sensPct;
+        const minP = maxA * sensPct;
         const peaks = [];
-        for (let i = 1; i < spectrumPlot.length - 1; i++) {
-          if (spectrumPlot[i] > spectrumPlot[i - 1] && spectrumPlot[i] > spectrumPlot[i + 1]) {
-            if (spectrumPlot[i] >= minPeakHeight) {
-              peaks.push({ f: fPlot[i], amp: spectrumPlot[i] });
-            }
+        for (let i = 1; i < espPlot.length - 1; i++) {
+          if (espPlot[i] > espPlot[i - 1] && espPlot[i] > espPlot[i + 1] && espPlot[i] >= minP) {
+            peaks.push({ f: fPlot[i], amp: espPlot[i] });
           }
         }
         peaks.sort((a, b) => b.amp - a.amp);
 
-        // Buscar 1X
-        const match = peaks.find(p => Math.abs(p.f - fRot) <= tolHz);
-        const rpm = match ? match.f * 60.0 : null;
+        let match1X = null;
+        let rpmMedida = null;
 
-        resultados.push({
-          nombre: item.nombre,
-          fPlot, spectrumPlot, rms,
-          f1X: match ? match.f : null,
-          amp1X: match ? match.amp : null,
-          rpm: rpm
-        });
+        if (slotObj.tipo === 'vacio') {
+          match1X = peaks.find(p => Math.abs(p.f - fRot) <= tolHz);
+          if (match1X) {
+            rpmMedida = match1X.f * 60.0;
+            resultadosVacios.push({ slot: s, f1X: match1X.f, amp1X: match1X.amp, rpm: rpmMedida, rms: rms });
+          }
+        } else {
+          // Con carga: buscar pico desplazado a menor frecuencia
+          const picosSub = peaks.filter(p => p.f >= fRot * 0.4 && p.f <= fRot * 0.98);
+          if (picosSub.length > 0) {
+            match1X = picosSub[0];
+            rpmMedida = match1X.f * 60.0;
+            resCarga = { slot: 4, fCarga: match1X.f, ampCarga: match1X.amp, rpmCarga: rpmMedida, rms: rms };
+          }
+        }
 
-        // Traza del espectro
-        const col = coloresBase[idx % coloresBase.length];
-        traces.push({
-          x: fPlot, y: spectrumPlot,
-          mode: 'lines',
-          name: `Ensayo ${idx + 1} (${rpm ? rpm.toFixed(1) + ' RPM' : 'Vacío'})`,
-          line: { color: col, width: 1.5 },
-          hovertemplate: `<b>${item.nombre}</b><br>Frec: %{x:.2f} Hz<br>Amp: %{y:.4f}<extra></extra>`
-        });
+        // Graficar individualmente en el Slot
+        box.innerHTML = `<div id="plot_s_${s}" class="w-full h-64"></div>`;
+        const colLine = s === 4 ? '#dc2626' : (s === 1 ? '#2563eb' : (s === 2 ? '#0284c7' : '#0d9488'));
 
-        if (match) {
+        const traces = [{
+          x: fPlot, y: espPlot, mode: 'lines',
+          line: { color: colLine, width: 1.5 },
+          name: `Slot ${s}`
+        }];
+
+        if (match1X) {
           traces.push({
-            x: [match.f], y: [match.amp],
-            mode: 'markers+text',
-            name: `1X E${idx + 1}`,
-            marker: { color: col, size: 7, symbol: 'circle' },
-            text: [match.f.toFixed(1) + ' Hz'],
+            x: [match1X.f], y: [match1X.amp], mode: 'markers+text',
+            marker: { color: 'red', size: 7, symbol: 'x' },
+            text: [`${match1X.f.toFixed(1)} Hz (${rpmMedida.toFixed(0)} RPM)`],
             textposition: 'top center',
-            textfont: { size: 9 },
+            textfont: { size: 9, color: 'darkred' },
             showlegend: false
           });
         }
-      });
 
-      // Cálculos globales de vacío
-      const rpmsValidas = resultados.filter(r => r.rpm !== null).map(r => r.rpm);
-      const rpmPromedio = rpmsValidas.length > 0 ? rpmsValidas.reduce((a, b) => a + b, 0) / rpmsValidas.length : null;
-      const f1XPromedio = rpmPromedio ? rpmPromedio / 60.0 : null;
-      const rmsPromedio = resultados.reduce((a, b) => a + b.rms, 0) / resultados.length;
-
-      let stdRpm = 0;
-      if (rpmsValidas.length > 1) {
-        const variance = rpmsValidas.reduce((a, b) => a + Math.pow(b - rpmPromedio, 2), 0) / (rpmsValidas.length - 1);
-        stdRpm = Math.sqrt(variance);
-      }
-
-      // Actualizar KPIs
-      if (rpmPromedio) {
-        document.getElementById('kpiRpmPromedio').textContent = rpmPromedio.toFixed(1);
-        document.getElementById('kpiFreqPromedio').textContent = `Frec: ${f1XPromedio.toFixed(2)} Hz`;
-        document.getElementById('kpiStdRpm').textContent = rpmsValidas.length > 1 ? `± ${stdRpm.toFixed(2)}` : '1 lectura';
-        const deltaNom = ((rpmPromedio - rpmNominal) / rpmNominal) * 100.0;
-        document.getElementById('kpiDeltaNominal').textContent = `Desv: ${deltaNom >= 0 ? '+' : ''}${deltaNom.toFixed(2)}%`;
-      } else {
-        document.getElementById('kpiRpmPromedio').textContent = 'No detectado';
-        document.getElementById('kpiFreqPromedio').textContent = `Fuera de ±${tolHz} Hz`;
-        document.getElementById('kpiStdRpm').textContent = '--';
-        document.getElementById('kpiDeltaNominal').textContent = '--';
-      }
-      document.getElementById('kpiRmsPromedio').textContent = rmsPromedio.toFixed(4);
-      document.getElementById('kpiCoherencia').textContent = `${rpmsValidas.length}/${ensayosBase.length}`;
-
-      // Procesar Ensayo con Carga (si existe)
-      let rpmCarga = null;
-      let fCarga = null;
-      let ampCarga = null;
-      let rmsCarga = null;
-
-      if (ensayoCarga) {
-        const resCarga = computeFFTAndRMS(ensayoCarga.data, fs, freqplot);
-        rmsCarga = resCarga.rms;
-
-        traces.push({
-          x: resCarga.fPlot, y: resCarga.spectrumPlot,
-          mode: 'lines',
-          name: `🚨 Con Carga (Validación)`,
-          line: { color: '#dc2626', width: 2, dash: 'dash' },
-          hovertemplate: `<b>${ensayoCarga.nombre}</b><br>Frec: %{x:.2f} Hz<br>Amp: %{y:.4f}<extra></extra>`
-        });
-
-        // Buscar picos de la carga
-        if (f1XPromedio) {
-          const minP = resCarga.maxAmp * sensPct;
-          const peaksC = [];
-          for (let i = 1; i < resCarga.spectrumPlot.length - 1; i++) {
-            if (resCarga.spectrumPlot[i] > resCarga.spectrumPlot[i - 1] && resCarga.spectrumPlot[i] > resCarga.spectrumPlot[i + 1]) {
-              if (resCarga.spectrumPlot[i] >= minP) {
-                const f = resCarga.fPlot[i];
-                if (f >= f1XPromedio * 0.4 && f <= f1XPromedio * 0.98) {
-                  peaksC.push({ f, amp: resCarga.spectrumPlot[i] });
-                }
-              }
-            }
-          }
-          peaksC.sort((a, b) => b.amp - a.amp);
-          if (peaksC.length > 0) {
-            fCarga = peaksC[0].f;
-            ampCarga = peaksC[0].amp;
-            rpmCarga = fCarga * 60.0;
-
-            traces.push({
-              x: [fCarga], y: [ampCarga],
-              mode: 'markers+text',
-              name: 'Pico con Carga',
-              marker: { color: '#dc2626', size: 9, symbol: 'triangle-down' },
-              text: [`Carga: ${fCarga.toFixed(1)} Hz`],
-              textposition: 'bottom center',
-              showlegend: false
+        // Líneas verticales armónicas
+        const shapes = [];
+        for (let n = 1; n <= 3; n++) {
+          const fa = fRot * n;
+          if (fa <= freqplot) {
+            shapes.push({
+              type: 'line', x0: fa, x1: fa, y0: 0, y1: maxA * 1.05,
+              line: { color: '#888888', width: 1, dash: 'dot' }
             });
           }
         }
+
+        const titulo = `Slot ${s} (${s === 4 ? 'Con Carga' : 'Vacío'}) | ${rpmMedida ? rpmMedida.toFixed(1) + ' RPM' : 'Sin pico'} | RMS: ${rms.toFixed(3)}`;
+        Plotly.newPlot(`plot_s_${s}`, traces, {
+          title: { text: titulo, font: { size: 11 } },
+          margin: { l: 35, r: 15, t: 30, b: 30 },
+          xaxis: { title: 'Frecuencia [Hz]', range: [0, freqplot] },
+          yaxis: { title: 'Amplitud [m/s²]' },
+          shapes: shapes,
+          showlegend: false
+        }, { responsive: true, displaylogo: false });
       }
 
-      // Veredicto en el Banner
-      const statusBanner = document.getElementById('statusBanner');
-      statusBanner.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200', 'bg-blue-50', 'text-blue-800', 'border-blue-200', 'bg-amber-50', 'text-amber-800', 'border-amber-200');
+      document.getElementById('kpiEnsayosActivos').textContent = `${totalActivos} / 4`;
 
-      if (rpmCarga && rpmPromedio && rpmCarga < rpmPromedio) {
-        const caidaRpm = rpmPromedio - rpmCarga;
-        const caidaPct = (caidaRpm / rpmPromedio) * 100.0;
-        statusBanner.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
-        statusBanner.innerHTML = `
-          🎯 <strong>¡VALIDACIÓN DE ROTACIÓN EXITOSA Y CONFIRMADA!</strong><br>
-          Al aplicar carga al equipo, la rotación descendió de <strong>${rpmPromedio.toFixed(1)} RPM (${f1XPromedio.toFixed(2)} Hz)</strong> 
-          a <strong>${rpmCarga.toFixed(1)} RPM (${fCarga.toFixed(2)} Hz)</strong>, reduciéndose en <strong>${caidaRpm.toFixed(1)} RPM (${caidaPct.toFixed(1)}%)</strong>.<br>
-          ✅ Esto <strong>certifica matemáticamente que el punto corresponde al giro real del eje</strong>, descartando frecuencias fijas de red eléctrica o resonancias.
+      // KPIs globales
+      let rpmPromedio = null;
+      let stdRpm = 0;
+      if (resultadosVacios.length > 0) {
+        const sum = resultadosVacios.reduce((a, b) => a + b.rpm, 0);
+        rpmPromedio = sum / resultadosVacios.length;
+        if (resultadosVacios.length > 1) {
+          const varR = resultadosVacios.reduce((a, b) => a + Math.pow(b.rpm - rpmPromedio, 2), 0) / (resultadosVacios.length - 1);
+          stdRpm = Math.sqrt(varR);
+        }
+        document.getElementById('kpiRpmPromedio').textContent = rpmPromedio.toFixed(1);
+        document.getElementById('kpiFreqPromedio').textContent = `Frec: ${(rpmPromedio / 60.0).toFixed(2)} Hz`;
+        document.getElementById('kpiStdRpm').textContent = resultadosVacios.length > 1 ? `± ${stdRpm.toFixed(2)}` : '1 lectura';
+        const dNom = ((rpmPromedio - rpmNominal) / rpmNominal) * 100.0;
+        document.getElementById('kpiDeltaNominal').textContent = `Desv: ${dNom >= 0 ? '+' : ''}${dNom.toFixed(2)}%`;
+      } else if (resCarga) {
+        document.getElementById('kpiRpmPromedio').textContent = resCarga.rpmCarga.toFixed(1);
+        document.getElementById('kpiFreqPromedio').textContent = `Con Carga: ${resCarga.fCarga.toFixed(2)} Hz`;
+      } else {
+        document.getElementById('kpiRpmPromedio').textContent = '--';
+      }
+
+      // Banner diagnóstico
+      const banner = document.getElementById('statusBanner');
+      banner.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200', 'bg-blue-50', 'text-blue-800', 'border-blue-200');
+
+      if (resCarga && rpmPromedio && resCarga.rpmCarga < rpmPromedio) {
+        const caida = rpmPromedio - resCarga.rpmCarga;
+        banner.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+        banner.innerHTML = `
+          🎯 <strong>¡VALIDACIÓN EXITOSA CONFIRMADA!</strong><br>
+          Al aplicar carga, la velocidad de rotación cayó de <strong>${rpmPromedio.toFixed(1)} RPM</strong> a <strong>${resCarga.rpmCarga.toFixed(1)} RPM</strong> 
+          (-${caida.toFixed(1)} RPM). Esto ratifica con certeza que el punto medido es la velocidad real del eje y no una perturbación eléctrica de 60 Hz.
         `;
       } else if (rpmPromedio) {
-        statusBanner.classList.add('bg-blue-50', 'text-blue-800', 'border-blue-200');
-        statusBanner.innerHTML = `
-          ✅ <strong>Medición Base Lista:</strong> Velocidad promedio calculada en <strong>${rpmPromedio.toFixed(1)} RPM</strong> (${f1XPromedio.toFixed(2)} Hz) con ${rpmsValidas.length} ensayos coincidentes. 
-          <em>Opcional: Sube una medición con carga para validar el desplazamiento de la frecuencia.</em>
+        banner.classList.add('bg-blue-50', 'text-blue-800', 'border-blue-200');
+        banner.innerHTML = `
+          ✅ <strong>Medición Lista:</strong> Velocidad promedio calculada en <strong>${rpmPromedio.toFixed(1)} RPM</strong>.
         `;
-      } else {
-        statusBanner.classList.add('bg-amber-50', 'text-amber-800', 'border-amber-200');
-        statusBanner.innerHTML = `⚠️ No se detectó un pico coincidente con la referencia. Verifica si el equipo gira a la velocidad nominal esperada o ajusta la tolerancia.`;
       }
-
-      // Tabla Resumen
-      const tbody = document.getElementById('tablaEnsayosBody');
-      tbody.innerHTML = '';
-      resultados.forEach((r, idx) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="py-2.5 px-3 font-semibold text-slate-700">Ensayo ${idx + 1} (Vacío)</td>
-          <td class="py-2.5 px-3 text-slate-500">${r.nombre}</td>
-          <td class="py-2.5 px-3 font-bold text-slate-800">${r.f1X ? r.f1X.toFixed(2) : '--'}</td>
-          <td class="py-2.5 px-3 font-semibold text-emerald-600">${r.rpm ? r.rpm.toFixed(1) : 'No detectado'}</td>
-          <td class="py-2.5 px-3 text-slate-600">${r.amp1X ? r.amp1X.toFixed(4) : '--'}</td>
-          <td class="py-2.5 px-3 text-slate-600">${r.rms.toFixed(4)}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      if (ensayoCarga) {
-        const trC = document.createElement('tr');
-        trC.innerHTML = `
-          <td class="py-2.5 px-3 font-semibold text-rose-700">🚨 Con Carga (Validación)</td>
-          <td class="py-2.5 px-3 text-slate-500">${ensayoCarga.nombre}</td>
-          <td class="py-2.5 px-3 font-bold text-rose-600">${fCarga ? fCarga.toFixed(2) : '--'}</td>
-          <td class="py-2.5 px-3 font-semibold text-rose-600">${rpmCarga ? rpmCarga.toFixed(1) : 'Verificar carga'}</td>
-          <td class="py-2.5 px-3 text-slate-600">${ampCarga ? ampCarga.toFixed(4) : '--'}</td>
-          <td class="py-2.5 px-3 text-slate-600">${rmsCarga ? rmsCarga.toFixed(4) : '--'}</td>
-        `;
-        tbody.appendChild(trC);
-      }
-
-      // Graficar con Plotly
-      const layout = {
-        margin: { l: 45, r: 20, t: 25, b: 35 },
-        xaxis: { title: 'Frecuencia [Hz]', range: [0, freqplot] },
-        yaxis: { title: 'Amplitud de Aceleración [m/s²]' },
-        hovermode: 'closest',
-        showlegend: true,
-        legend: { orientation: 'h', x: 1, y: 1.05, xanchor: 'right' }
-      };
-
-      Plotly.newPlot('spectrumPlot', traces, layout, { responsive: true, displaylogo: false });
     }
+
+    // Descarga de LaTeX
+    document.getElementById('btnDescargarLatex').addEventListener('click', () => {
+      const proj = document.getElementById('infProyecto').value;
+      const ref = document.getElementById('infReferencia').value;
+      const tex = `% INFORME TECNICO DE VIBRACIONES Y MEDICION DE RPM
+\\documentclass[11pt,a4paper]{article}
+\\usepackage[utf8]{inputenc}
+\\usepackage[spanish]{babel}
+\\usepackage{geometry}
+\\geometry{top=2cm, bottom=2cm, left=2.2cm, right=2.2cm}
+\\usepackage{booktabs}
+\\title{INFORME TECNICO - MEDICION DE RPM POR VIBRACION}
+\\author{${document.getElementById('infRealizo').value}}
+\\date{\\today}
+\\begin{document}
+\\maketitle
+\\section{Metadatos}
+Proyecto: ${proj} \\\\
+Referencia: ${ref} \\\\
+\\section{Resultados}
+Frecuencia maxima de visualizacion: ${freqplotInput.value} Hz. \\\\
+\\end{document}`;
+      
+      const blob = new Blob([tex], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Informe_${ref}.tex`;
+      a.click();
+    });
   </script>
 </body>
 </html>
