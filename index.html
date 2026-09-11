@@ -1,660 +1,1150 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Medidor de RPM con Validación | Tacómetro Digital</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Plotly.js CDN -->
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Analizador de RPM | Informe Técnico</title>
+
+  <!-- CDN Libraries -->
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-  <!-- PapaParse CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    @media print {
-      .no-print { display: none !important; }
-      body { background-color: white !important; }
+    /* ── Reset base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; }
+    body { font-family: 'Inter', sans-serif; background: #f0f4f8; color: #1a2332; min-height: 100vh; }
+
+    /* ── Variables Institucionales ──────────────────────────────── */
+    :root {
+      --primary:    #1F497D;
+      --primary-d:  #0f2444;
+      --accent:     #4F81BD;
+      --accent2:    #4BACC6;
+      --red:        #c0392b;
+      --green:      #1a7f4e;
+      --amber:      #d4870d;
+      --purple:     #6f42c1;
+      --bg:         #f0f4f8;
+      --surface:    #ffffff;
+      --border:     #dce8f0;
+      --label-bg:   #F2F2F2;
+      --text-muted: #6b7a8d;
     }
+
+    /* ── Pantalla de Login ──────────────────────────────────────── */
+    #login-screen {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #0f2444 0%, #1F497D 50%, #2563a8 100%);
+    }
+    .login-card {
+      background: white; border-radius: 20px;
+      padding: 48px 44px; width: 380px; text-align: center;
+      box-shadow: 0 24px 60px rgba(15,36,68,0.35);
+    }
+    .login-icon { font-size: 3.2rem; margin-bottom: 12px; }
+    .login-card h2 { font-size: 1.5rem; font-weight: 700; color: var(--primary-d); margin-bottom: 4px; }
+    .login-card p { color: var(--text-muted); font-size: 0.82rem; margin-bottom: 28px; }
+    .login-input {
+      width: 100%; padding: 12px 16px; border: 2px solid var(--border);
+      border-radius: 10px; font-size: 0.88rem; font-family: 'Inter', sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+      margin-bottom: 14px; color: var(--primary-d);
+    }
+    .login-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,129,189,0.18); }
+    .btn-primary {
+      width: 100%; padding: 13px; background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s; font-family: 'Inter', sans-serif;
+    }
+    .btn-primary:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .login-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 14px; }
+    .login-error { color: var(--red); font-size: 0.8rem; margin-bottom: 10px; display: none; }
+
+    /* ── App principal ──────────────────────────────────────────── */
+    #app { display: none; }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    .app-header {
+      background: linear-gradient(100deg, #0f2444 0%, #1F497D 60%, #2563a8 100%);
+      padding: 20px 32px; display: flex; align-items: center;
+      justify-content: space-between; box-shadow: 0 4px 18px rgba(15,36,68,0.28);
+    }
+    .app-header h1 { color: white; font-size: 1.3rem; font-weight: 700; }
+    .app-header p  { color: #b8cfe4; font-size: 0.76rem; margin-top: 4px; }
+    .badge-header {
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+      color: #c8f7c5; font-size: 0.68rem; font-weight: 600; padding: 5px 14px;
+      border-radius: 20px; letter-spacing: 0.04em;
+    }
+    .btn-logout {
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+      color: white; padding: 7px 16px; border-radius: 8px; font-size: 0.8rem;
+      cursor: pointer; font-family: 'Inter', sans-serif; font-weight: 500;
+      transition: background 0.2s; margin-left: 10px;
+    }
+    .btn-logout:hover { background: rgba(255,255,255,0.2); }
+
+    /* ── Contenedor principal ───────────────────────────────────── */
+    .main-container { max-width: 1300px; margin: 0 auto; padding: 24px 28px; }
+
+    /* ── Sidebar + content grid ─────────────────────────────────── */
+    .layout-grid { display: grid; grid-template-columns: 280px 1fr; gap: 24px; }
+
+    /* ── Sidebar ─────────────────────────────────────────────────── */
+    .sidebar {
+      background: linear-gradient(160deg, #0f2444 0%, #1F497D 100%);
+      border-radius: 14px; padding: 20px 18px; height: fit-content;
+      position: sticky; top: 24px;
+    }
+    .sidebar h3 { color: rgba(255,255,255,0.6); font-size: 0.65rem; letter-spacing: 0.1em;
+                  text-transform: uppercase; font-weight: 700; margin-bottom: 12px; margin-top: 16px; }
+    .sidebar h3:first-child { margin-top: 0; }
+    .sidebar-label { color: #b8cfe4; font-size: 0.75rem; margin-bottom: 4px; display: block; font-weight: 500; }
+    .sidebar-input {
+      width: 100%; padding: 9px 12px; background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+      color: white; font-size: 0.85rem; font-family: 'Inter', sans-serif;
+      outline: none; transition: border-color 0.2s; margin-bottom: 12px;
+    }
+    .sidebar-input:focus { border-color: var(--accent2); }
+    .sidebar-note { color: rgba(255,255,255,0.5); font-size: 0.72rem; margin-top: -8px; margin-bottom: 12px; }
+    .sidebar-divider { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 14px 0; }
+
+    /* ── Tarjetas de sección ─────────────────────────────────────── */
+    .section-card {
+      background: var(--surface); border-radius: 14px; padding: 20px 22px;
+      box-shadow: 0 2px 10px rgba(31,73,125,0.07); margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--primary);
+      border-left: 4px solid var(--accent); padding-left: 10px; margin-bottom: 16px;
+    }
+
+    /* ── KPI Grid ────────────────────────────────────────────────── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+    .kpi-card {
+      background: var(--surface); border-radius: 12px; padding: 18px 14px;
+      border-top: 4px solid var(--accent); text-align: center;
+      box-shadow: 0 2px 10px rgba(31,73,125,0.07);
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .kpi-card:hover { box-shadow: 0 6px 22px rgba(31,73,125,0.14); transform: translateY(-2px); }
+    .kpi-card.g  { border-top-color: var(--green);  }
+    .kpi-card.r  { border-top-color: var(--red);    }
+    .kpi-card.am { border-top-color: var(--amber);  }
+    .kpi-card.pu { border-top-color: var(--purple); }
+    .kpi-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.07em;
+                 text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+    .kpi-value { font-size: 1.85rem; font-weight: 700; color: var(--primary-d); line-height: 1.1; }
+    .kpi-value.green  { color: var(--green);  }
+    .kpi-value.red    { color: var(--red);    }
+    .kpi-value.blue   { color: var(--primary);}
+    .kpi-value.amber  { color: var(--amber);  }
+    .kpi-value.purple { color: var(--purple); }
+    .kpi-sub { font-size: 0.7rem; color: #9aa6b2; margin-top: 4px; }
+
+    /* ── Upload slots ────────────────────────────────────────────── */
+    .slots-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 14px; }
+    .slot-box {
+      border: 2px dashed var(--accent); border-radius: 12px; padding: 16px;
+      text-align: center; cursor: pointer; transition: all 0.2s;
+      background: rgba(79,129,189,0.03); position: relative;
+    }
+    .slot-box:hover { background: rgba(79,129,189,0.08); border-color: var(--primary); }
+    .slot-box.loaded { border-style: solid; background: rgba(79,129,189,0.06); }
+    .slot-box.diff   { border-color: var(--red); background: rgba(192,57,43,0.03); }
+    .slot-box.diff.loaded { border-color: var(--red); background: rgba(192,57,43,0.06); }
+    .slot-icon { font-size: 1.6rem; margin-bottom: 6px; }
+    .slot-title { font-size: 0.75rem; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+    .slot-box.diff .slot-title { color: var(--red); }
+    .slot-tag { font-size: 0.63rem; color: var(--text-muted); }
+    .slot-status { font-size: 0.72rem; color: var(--green); margin-top: 6px;
+                   font-weight: 600; display: none; word-break: break-all; }
+    .slot-box input[type="file"] {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+
+    /* ── Banners ─────────────────────────────────────────────────── */
+    .banner {
+      border-radius: 10px; padding: 14px 18px; font-size: 0.85rem;
+      margin-bottom: 16px; border-left: 5px solid;
+    }
+    .banner.ok   { background: linear-gradient(135deg,#e8f5ee,#d4edda); border-color:var(--green); color:#155724; }
+    .banner.warn { background: linear-gradient(135deg,#fffbea,#fff3cd); border-color:var(--amber); color:#7a4f0a; }
+    .banner.info { background: linear-gradient(135deg,#e8f0fc,#dce8fb); border-color:var(--accent); color:var(--primary); }
+    .banner.empty{ background: linear-gradient(135deg,#f8f9fa,#eef1f5); border-color:#9aa6b2; color:#4a5568; }
+
+    /* ── Gráficos ─────────────────────────────────────────────────── */
+    .chart-wrap { background: white; border-radius: 12px; padding: 16px;
+                  box-shadow: 0 1px 8px rgba(31,73,125,0.07); margin-bottom: 18px; }
+    .chart-title { font-size: 0.8rem; font-weight: 600; color: var(--primary);
+                   margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+    /* ── Formulario de Informe ───────────────────────────────────── */
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .field-group { display: flex; flex-direction: column; margin-bottom: 10px; }
+    .field-label { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+    .field-input, .field-select, .field-textarea {
+      padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+      font-family: 'Inter', sans-serif; font-size: 0.84rem; color: var(--primary-d);
+      transition: border-color 0.2s, box-shadow 0.2s; outline: none; background: white;
+    }
+    .field-input:focus, .field-select:focus, .field-textarea:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,129,189,0.14);
+    }
+    .field-textarea { resize: vertical; min-height: 72px; }
+
+    /* ── Tabs ─────────────────────────────────────────────────────── */
+    .tab-bar { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 18px; }
+    .tab-btn {
+      padding: 8px 18px; font-size: 0.8rem; font-weight: 600; border: none;
+      background: none; cursor: pointer; color: var(--text-muted);
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      font-family: 'Inter', sans-serif; transition: color 0.2s;
+    }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Botones de acción ───────────────────────────────────────── */
+    .action-bar { display: flex; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
+    .btn-action {
+      padding: 12px 24px; border-radius: 10px; font-weight: 600; font-size: 0.85rem;
+      cursor: pointer; font-family: 'Inter', sans-serif; border: none; transition: all 0.2s;
+    }
+    .btn-gen {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      color: white; flex: 1;
+    }
+    .btn-gen:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-download {
+      background: var(--primary); color: white;
+    }
+    .btn-download:hover { background: var(--primary-d); transform: translateY(-1px); }
+    .btn-demo {
+      background: white; color: var(--primary); border: 1.5px solid var(--accent);
+    }
+    .btn-demo:hover { background: #e8f0fc; }
+    .btn-reset {
+      background: white; color: var(--red); border: 1.5px solid var(--red);
+      font-size: 0.78rem; padding: 8px 16px;
+    }
+    .btn-reset:hover { background: #fdeded; }
+    a.btn-download { text-decoration: none; display: inline-block; text-align: center; }
+
+    /* ── Tabla de resultados ─────────────────────────────────────── */
+    .results-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .results-table th {
+      background: var(--primary); color: white; padding: 9px 12px;
+      text-align: left; font-weight: 600; font-size: 0.72rem; letter-spacing: 0.05em;
+    }
+    .results-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    .results-table tr:nth-child(even) td { background: #f8f9fa; }
+    .results-table .rpm-cell { font-weight: 700; color: var(--primary); }
+    .results-table .warn-cell { color: var(--red); }
+
+    /* ── Responsivo ──────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .layout-grid { grid-template-columns: 1fr; }
+      .kpi-grid    { grid-template-columns: repeat(2, 1fr); }
+      .slots-grid  { grid-template-columns: repeat(2, 1fr); }
+      .sidebar     { position: static; }
+    }
+    @media (max-width: 580px) {
+      .kpi-grid   { grid-template-columns: 1fr 1fr; }
+      .slots-grid { grid-template-columns: 1fr 1fr; }
+      .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
+    }
+
+    /* ── Print / PDF ─────────────────────────────────────────────── */
+    @media print {
+      .sidebar, .btn-primary, .btn-action, .slot-box, .login-screen,
+      .btn-logout, .badge-header, .btn-reset, .tab-bar, #login-screen { display: none !important; }
+      body { background: white; font-size: 11pt; }
+      .layout-grid { grid-template-columns: 1fr; }
+      .app-header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+
+    /* ── Scroll bar ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #e8edf3; }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
+<body>
 
-  <!-- PANTALLA DE ACCESO POR CONTRASEÑA -->
-  <div id="loginScreen" class="fixed inset-0 bg-slate-900/90 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center space-y-5">
-      <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto text-3xl">
-        🔒
-      </div>
-      <div>
-        <h2 class="text-2xl font-bold text-slate-800">Acceso al Medidor de RPM</h2>
-        <p class="text-xs text-slate-500 mt-1">Plataforma técnica de análisis espectral de vibraciones</p>
-      </div>
-      <div class="space-y-3">
-        <input type="password" id="passwordInput" placeholder="Ingresa la contraseña" 
-          class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none text-center">
-        <button id="btnLogin" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl transition shadow-sm">
-          Ingresar a la Plataforma
-        </button>
-        <p id="loginError" class="hidden text-xs text-rose-600 font-medium">Contraseña incorrecta. Intenta nuevamente.</p>
-        <p class="text-[11px] text-slate-400">Contraseña por defecto: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-600">tecnico2026</code></p>
-      </div>
+<!-- ══════════════════ PANTALLA DE LOGIN ══════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon">⚙️</div>
+    <h2>Analizador de RPM</h2>
+    <p>Plataforma técnica de análisis espectral de vibraciones</p>
+    <div class="login-error" id="login-error">❌ Contraseña incorrecta.</div>
+    <input id="pwd-input" class="login-input" type="password" placeholder="Contraseña de acceso…"
+           onkeydown="if(event.key==='Enter') doLogin()"/>
+    <button class="btn-primary" onclick="doLogin()">🔑 Ingresar a la Plataforma</button>
+    <div class="login-hint">🔐 Acceso restringido · Procesamiento 100% local en navegador · Sin almacenamiento en nube</div>
+  </div>
+</div>
+
+<!-- ══════════════════ APP PRINCIPAL ══════════════════════ -->
+<div id="app">
+
+  <!-- Header -->
+  <div class="app-header">
+    <div>
+      <h1>⚙️ Analizador de RPM por Vibración</h1>
+      <p>Determinación de velocidad de giro · Análisis espectral FFT · Informe Técnico Oficial</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="badge-header">🔒 CERO ALMACENAMIENTO EN NUBE</span>
+      <button class="btn-logout" onclick="doLogout()">🚪 Salir</button>
     </div>
   </div>
 
-  <!-- Header Principal -->
-  <header class="bg-slate-900 text-white shadow-md no-print">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
-      <div class="flex items-center gap-3">
-        <span class="text-3xl">⚙️</span>
-        <div>
-          <h1 class="text-xl font-bold tracking-tight">Tacómetro Digital por Vibración con Validación</h1>
-          <p class="text-xs text-slate-400">4 Gráficos FFT Independientes, Rango Configurable e Informe Técnico</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-700">
-          🔒 100% Volátil (Cero Datos en Servidores)
-        </span>
-        <button id="btnLogout" class="text-xs text-slate-400 hover:text-white underline">Cerrar Sesión</button>
-      </div>
-    </div>
-  </header>
+  <div class="main-container">
+    <div class="layout-grid">
 
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <!-- ═══ SIDEBAR ═══════════════════════════════════════════ -->
+      <aside class="sidebar">
+        <h3>🔧 Parámetros del Equipo</h3>
+        <label class="sidebar-label">RPM Nominal de Placa</label>
+        <input class="sidebar-input" id="rpm-nominal" type="number" value="1750" min="1" max="100000" oninput="updateF1x()"/>
+        <div class="sidebar-note" id="f1x-note">Frecuencia 1X: 29.17 Hz</div>
 
-      <!-- Panel Lateral de Configuración -->
-      <div class="lg:col-span-1 bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4 no-print">
-        <h2 class="text-base font-semibold text-slate-800 flex items-center gap-2">
-          <span>🔧</span> Parámetros del Equipo
-        </h2>
+        <hr class="sidebar-divider"/>
+        <h3>🎛️ Configuración del Sensor</h3>
+        <label class="sidebar-label">Frec. máx. visualización [Hz]</label>
+        <input class="sidebar-input" id="freqplot" type="number" value="200" min="10" max="5000"/>
 
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">RPM Nominal de Placa</label>
-          <input type="number" id="rpmNominal" value="1750" step="50" min="1"
-            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none">
-          <p class="text-[11px] text-slate-500 mt-1">Frecuencia 1X esperada: <span id="fRotLabel" class="font-bold text-blue-600">29.17 Hz</span></p>
-        </div>
+        <label class="sidebar-label">Frecuencia de Muestreo Fs [Hz]</label>
+        <input class="sidebar-input" id="fs-val" type="number" value="11628" min="100" max="200000"/>
 
-        <div class="border-t border-slate-100 pt-3">
-          <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia máx. visualización [Hz]</label>
-          <!-- CASILLA DE RANGO DE FRECUENCIA - PREDETERMINADO EN 200 Hz -->
-          <input type="number" id="freqplotInput" value="200" step="20" min="20" max="5000"
-            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none">
-          <p class="text-[10px] text-slate-400 mt-0.5">Predeterminado en 200 Hz como en el código</p>
-        </div>
+        <hr class="sidebar-divider"/>
+        <h3>🛠️ Detección de Picos</h3>
+        <label class="sidebar-label">Tolerancia armónicos (± Hz)</label>
+        <input class="sidebar-input" id="tol-hz" type="number" value="1.5" min="0.1" max="10" step="0.1"/>
 
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia Muestreo (Fs) [Hz]</label>
-          <input type="number" id="fsInput" value="11628" step="100" min="100"
-            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-        </div>
+        <label class="sidebar-label">Sensibilidad picos (% máx)</label>
+        <input class="sidebar-input" id="sens-pct" type="number" value="10" min="1" max="50"/>
 
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Tolerancia armónicos (± Hz)</label>
-          <input type="number" id="toleranciaInput" value="1.5" step="0.1" min="0.1"
-            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-        </div>
+        <label class="sidebar-label">Armónicos a marcar (1X, 2X…)</label>
+        <input class="sidebar-input" id="n-arm" type="number" value="3" min="1" max="6"/>
 
-        <div>
-          <label class="block text-xs font-medium text-slate-600 mb-1">Sensibilidad de picos (% del máx)</label>
-          <input type="range" id="sensibilidadInput" value="10" min="2" max="50"
-            class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-          <div class="flex justify-between text-[11px] text-slate-500">
-            <span>Alta</span>
-            <span id="sensibilidadVal" class="font-bold">10%</span>
-            <span>Baja</span>
+        <hr class="sidebar-divider"/>
+        <button class="btn-action btn-demo" onclick="cargarDemo()" style="width:100%;text-align:center;">
+          🧪 Demo (4 mediciones simuladas)
+        </button>
+        <button class="btn-action btn-reset" onclick="resetTodo()" style="width:100%;margin-top:8px;text-align:center;">
+          🔄 Reiniciar Todo
+        </button>
+      </aside>
+
+      <!-- ═══ CONTENIDO PRINCIPAL ════════════════════════════════ -->
+      <main>
+
+        <!-- ── Slots de carga ─────────────────────────────────── -->
+        <div class="section-card">
+          <div class="section-title">📁 Carga de Archivos de Medición</div>
+          <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
+            Carga de 1 a 4 mediciones CSV. Ningún slot es obligatorio — la plataforma se adapta a los archivos disponibles.
+          </p>
+          <div class="slots-grid">
+            <div class="slot-box" id="slot-1">
+              <input type="file" accept=".csv,.txt" onchange="cargarArchivo(1,this)"/>
+              <div class="slot-icon">📊</div>
+              <div class="slot-title">Medición 1</div>
+              <div class="slot-tag">Condición base (requerida)</div>
+              <div class="slot-status" id="status-1"></div>
+            </div>
+            <div class="slot-box" id="slot-2">
+              <input type="file" accept=".csv,.txt" onchange="cargarArchivo(2,this)"/>
+              <div class="slot-icon">📊</div>
+              <div class="slot-title">Medición 2</div>
+              <div class="slot-tag">Opcional · Base</div>
+              <div class="slot-status" id="status-2"></div>
+            </div>
+            <div class="slot-box" id="slot-3">
+              <input type="file" accept=".csv,.txt" onchange="cargarArchivo(3,this)"/>
+              <div class="slot-icon">📊</div>
+              <div class="slot-title">Medición 3</div>
+              <div class="slot-tag">Opcional · Base</div>
+              <div class="slot-status" id="status-3"></div>
+            </div>
+            <div class="slot-box diff" id="slot-4">
+              <input type="file" accept=".csv,.txt" onchange="cargarArchivo(4,this)"/>
+              <div class="slot-icon">🔄</div>
+              <div class="slot-title">Medición 4</div>
+              <div class="slot-tag">Condición Diferente · Opcional</div>
+              <div class="slot-status" id="status-4"></div>
+            </div>
           </div>
-        </div>
-
-        <div class="border-t border-slate-100 pt-3">
-          <button id="btnDemo" class="w-full py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-lg transition border border-blue-200 flex items-center justify-center gap-1.5">
-            <span>🧪</span> Cargar Demo Completa
+          <button class="btn-action" style="background:linear-gradient(135deg,var(--primary),var(--accent));
+                  color:white;width:100%;margin-top:4px;" onclick="procesarTodo()">
+            ⚡ Procesar Mediciones Cargadas
           </button>
         </div>
-      </div>
 
-      <!-- Área de Contenido Principal -->
-      <div class="lg:col-span-3 space-y-5">
-
-        <!-- 4 SLOTS DE CARGA FLEXIBLES (NO RESTRICTIVOS) -->
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 no-print">
-          <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <span>📁</span> Carga de Archivos (Flexible: Sube 1, 2, 3 o los 4 ensayos)
-          </h3>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <!-- Slot 1 -->
-            <div class="border border-slate-200 hover:border-blue-500 bg-slate-50 p-3 rounded-lg cursor-pointer" onclick="document.getElementById('slotFile1').click()">
-              <input type="file" id="slotFile1" accept=".csv,.txt" class="hidden" onchange="handleSingleSlot(this, 1, 'vacio')">
-              <span class="text-lg">1️⃣</span>
-              <p class="text-[11px] font-bold text-slate-700">Vacío 1 (Base)</p>
-              <p id="labelSlot1" class="text-[10px] text-slate-400 mt-1">Sin archivo</p>
-            </div>
-            <!-- Slot 2 -->
-            <div class="border border-slate-200 hover:border-blue-500 bg-slate-50 p-3 rounded-lg cursor-pointer" onclick="document.getElementById('slotFile2').click()">
-              <input type="file" id="slotFile2" accept=".csv,.txt" class="hidden" onchange="handleSingleSlot(this, 2, 'vacio')">
-              <span class="text-lg">2️⃣</span>
-              <p class="text-[11px] font-bold text-slate-700">Vacío 2 (Opcional)</p>
-              <p id="labelSlot2" class="text-[10px] text-slate-400 mt-1">Sin archivo</p>
-            </div>
-            <!-- Slot 3 -->
-            <div class="border border-slate-200 hover:border-blue-500 bg-slate-50 p-3 rounded-lg cursor-pointer" onclick="document.getElementById('slotFile3').click()">
-              <input type="file" id="slotFile3" accept=".csv,.txt" class="hidden" onchange="handleSingleSlot(this, 3, 'vacio')">
-              <span class="text-lg">3️⃣</span>
-              <p class="text-[11px] font-bold text-slate-700">Vacío 3 (Opcional)</p>
-              <p id="labelSlot3" class="text-[10px] text-slate-400 mt-1">Sin archivo</p>
-            </div>
-            <!-- Slot 4 -->
-            <div class="border border-rose-200 hover:border-rose-500 bg-rose-50/50 p-3 rounded-lg cursor-pointer" onclick="document.getElementById('slotFile4').click()">
-              <input type="file" id="slotFile4" accept=".csv,.txt" class="hidden" onchange="handleSingleSlot(this, 4, 'carga')">
-              <span class="text-lg">🚨</span>
-              <p class="text-[11px] font-bold text-rose-700">Con Carga / Freno</p>
-              <p id="labelSlot4" class="text-[10px] text-slate-400 mt-1">Sin archivo</p>
-            </div>
+        <!-- ── KPIs ───────────────────────────────────────────── -->
+        <div class="kpi-grid" id="kpi-grid" style="display:none;">
+          <div class="kpi-card g">
+            <div class="kpi-label">🎯 RPM Promedio Real</div>
+            <div class="kpi-value green" id="kpi-rpm">—</div>
+            <div class="kpi-sub" id="kpi-freq">—</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">📋 Repetibilidad</div>
+            <div class="kpi-value blue" id="kpi-disp">—</div>
+            <div class="kpi-sub" id="kpi-delta">Δ respecto a nominal: —</div>
+          </div>
+          <div class="kpi-card am">
+            <div class="kpi-label">⚡ Vibración Global RMS</div>
+            <div class="kpi-value amber" id="kpi-rms">—</div>
+            <div class="kpi-sub">m/s² promedio base</div>
+          </div>
+          <div class="kpi-card pu">
+            <div class="kpi-label">🔍 Coherencia</div>
+            <div class="kpi-value purple" id="kpi-coher">—</div>
+            <div class="kpi-sub" id="kpi-subtotal">—</div>
           </div>
         </div>
 
-        <!-- Tarjetas de Resultados (KPIs) -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-emerald-500 border border-slate-200 text-center">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">🎯 RPM PROMEDIO REAL</div>
-            <div id="kpiRpmPromedio" class="text-2xl sm:text-3xl font-bold text-emerald-600 my-1">--</div>
-            <div id="kpiFreqPromedio" class="text-xs text-slate-500">Frec: -- Hz</div>
+        <!-- ── Banner diagnóstico ─────────────────────────────── -->
+        <div id="diagnostico-banner" style="display:none;"></div>
+
+        <!-- ── Gráficos (5, uno bajo el otro) ─────────────────── -->
+        <div id="charts-section" style="display:none;">
+          <div class="section-card" style="padding:14px 16px 8px;">
+            <div class="section-title">📈 Espectros FFT — Individuales y Comparativo</div>
+            <p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0;" id="charts-caption"></p>
           </div>
 
-          <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 border border-slate-200 text-center">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">📋 Repetibilidad</div>
-            <div id="kpiStdRpm" class="text-2xl sm:text-3xl font-bold text-blue-600 my-1">--</div>
-            <div id="kpiDeltaNominal" class="text-xs text-slate-500">Desv. placa: --</div>
+          <!-- Gráficos individuales 1-4 (apilados) -->
+          <div id="chart-1-wrap" class="chart-wrap" style="display:none;">
+            <div class="chart-title" id="chart-1-title"></div>
+            <div id="chart-1" style="height:320px;"></div>
+          </div>
+          <div id="chart-2-wrap" class="chart-wrap" style="display:none;">
+            <div class="chart-title" id="chart-2-title"></div>
+            <div id="chart-2" style="height:320px;"></div>
+          </div>
+          <div id="chart-3-wrap" class="chart-wrap" style="display:none;">
+            <div class="chart-title" id="chart-3-title"></div>
+            <div id="chart-3" style="height:320px;"></div>
+          </div>
+          <div id="chart-4-wrap" class="chart-wrap" style="display:none;">
+            <div class="chart-title" id="chart-4-title"></div>
+            <div id="chart-4" style="height:320px;"></div>
           </div>
 
-          <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-500 border border-slate-200 text-center">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">⚡ Vibración Global</div>
-            <div id="kpiRmsPromedio" class="text-2xl sm:text-3xl font-bold text-amber-600 my-1">--</div>
-            <div class="text-xs text-slate-500">RMS [m/s²] promedio</div>
-          </div>
-
-          <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-purple-500 border border-slate-200 text-center">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">📁 Ensayos Activos</div>
-            <div id="kpiEnsayosActivos" class="text-2xl sm:text-3xl font-bold text-purple-600 my-1">0 / 4</div>
-            <div class="text-xs text-slate-500">Archivos cargados</div>
-          </div>
-        </div>
-
-        <!-- Banner de Diagnóstico y Validación con Carga -->
-        <div id="statusBanner" class="hidden p-4 rounded-xl border text-sm font-medium"></div>
-
-        <!-- LOS 4 GRÁFICOS DE TRANSFORMADAS FFT INDIVIDUALES -->
-        <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-slate-200">
-          <div class="flex justify-between items-center mb-3">
-            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-              <span>📈</span> Gráficos de las Transformadas de Fourier (FFT) Individuales
-            </h3>
-            <span class="text-xs text-slate-400">Rango: 0 a <span id="labelRangoFreq">200</span> Hz</span>
-          </div>
-
-          <!-- Cuadrícula 2x2 para los 4 gráficos -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="gridGraficos">
-            <div class="border border-slate-100 rounded-lg p-2 text-center text-slate-400 py-12" id="slotPlotBox1">
-              Slot 1: Sin datos cargados
-            </div>
-            <div class="border border-slate-100 rounded-lg p-2 text-center text-slate-400 py-12" id="slotPlotBox2">
-              Slot 2: Sin datos cargados
-            </div>
-            <div class="border border-slate-100 rounded-lg p-2 text-center text-slate-400 py-12" id="slotPlotBox3">
-              Slot 3: Sin datos cargados
-            </div>
-            <div class="border border-slate-100 rounded-lg p-2 text-center text-slate-400 py-12" id="slotPlotBox4">
-              Slot 4: Sin datos cargados
-            </div>
+          <!-- Gráfico 5: Superposición (siempre visible si ≥2) -->
+          <div id="chart-sup-wrap" class="chart-wrap" style="display:none;">
+            <div class="chart-title">📊 Gráfico Comparativo — Superposición de Todos los Espectros</div>
+            <div id="chart-sup" style="height:380px;"></div>
           </div>
         </div>
 
-        <!-- FORMULARIO DE INFORME TÉCNICO OFICIAL (Formato_IT) -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
-          <div class="flex justify-between items-center border-b pb-2">
-            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-              <span>📄</span> Generación de Informe Técnico Oficial (Formato_IT)
-            </h3>
-            <button onclick="window.print()" class="no-print px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold transition">
-              🖨️ Imprimir / Guardar como PDF
-            </button>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <div>
-              <label class="block font-medium text-slate-600 mb-0.5">Proyecto / Iniciativa:</label>
-              <input type="text" id="infProyecto" value="Evaluación Operacional de RPM por Vibraciones" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
-            </div>
-            <div>
-              <label class="block font-medium text-slate-600 mb-0.5">Referencia / Modelo:</label>
-              <input type="text" id="infReferencia" value="LIC-600W-2026" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
-            </div>
-            <div>
-              <label class="block font-medium text-slate-600 mb-0.5">Categoría de Producto:</label>
-              <input type="text" id="infCategoria" value="Refrigeración / Electrodomésticos" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
-            </div>
-            <div>
-              <label class="block font-medium text-slate-600 mb-0.5">Centro de Costo:</label>
-              <input type="text" id="infCentroCosto" value="Mantenimiento y Calidad" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
-            </div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-3 text-xs border-t pt-3">
-            <div>
-              <label class="block font-medium text-slate-600 mb-0.5">Realizó (Técnico):</label>
-              <input type="text" id="infRealizo" value="Técnico de Ensayos" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
-            </div>
-            <div>
-              <label class="block font-medium text-slate-600 mb-0.5">Revisó (Ingeniero):</label>
-              <input type="text" id="infReviso" value="Ing. Especialista Vibraciones" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
-            </div>
-            <div>
-              <label class="block font-medium text-slate-600 mb-0.5">Aprobó (Líder Técnico):</label>
-              <input type="text" id="infAprobo" value="Director de Laboratorio" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md">
-            </div>
-          </div>
-
-          <div class="text-right pt-2 no-print">
-            <button id="btnDescargarLatex" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold transition">
-              📥 Descargar Código Fuente LaTeX (.tex)
-            </button>
+        <!-- ── Tabla de resultados ─────────────────────────────── -->
+        <div id="results-table-wrap" class="section-card" style="display:none;">
+          <div class="section-title">📊 Tabla de Resultados por Medición</div>
+          <div style="overflow-x:auto;">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Medición</th><th>Archivo</th><th>Frec. 1X [Hz]</th>
+                  <th>RPM Medida</th><th>Amplitud 1X</th><th>RMS [m/s²]</th>
+                </tr>
+              </thead>
+              <tbody id="results-tbody"></tbody>
+            </table>
           </div>
         </div>
 
-      </div>
-    </div>
-  </main>
+        <!-- ── Formulario Informe Técnico ──────────────────────── -->
+        <div id="report-section" class="section-card" style="display:none;">
+          <div class="section-title">📄 Generación del Informe Técnico Oficial</div>
+          <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:16px;">
+            Completa los campos para generar el Informe Técnico con el formato institucional oficial.
+          </p>
 
-  <script>
-    // 1. SISTEMA DE AUTENTICACIÓN
-    const PASSWORD_APP = "tecnico2026";
-    const loginScreen = document.getElementById('loginScreen');
-    const passwordInput = document.getElementById('passwordInput');
-    const btnLogin = document.getElementById('btnLogin');
-    const loginError = document.getElementById('loginError');
-    const btnLogout = document.getElementById('btnLogout');
+          <!-- Tabs -->
+          <div class="tab-bar">
+            <button class="tab-btn active" onclick="showTab('meta')">📋 Metadatos</button>
+            <button class="tab-btn" onclick="showTab('contenido')">📝 Contenido Técnico</button>
+            <button class="tab-btn" onclick="showTab('resp')">✍️ Responsables</button>
+          </div>
 
-    if (sessionStorage.getItem('autenticado') === 'true') {
-      loginScreen.classList.add('hidden');
-    }
+          <div class="tab-panel active" id="tab-meta">
+            <div class="form-grid-2">
+              <div class="field-group">
+                <label class="field-label">Proyecto / Iniciativa</label>
+                <input class="field-input" id="f-proyecto" value="Evaluación de RPM por Vibraciones"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Módulo</label>
+                <input class="field-input" id="f-modulo" value="Producto portafolio"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Categoría de Producto</label>
+                <input class="field-input" id="f-categoria" value="Refrigeración"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Tipo de Proyecto</label>
+                <input class="field-input" id="f-tipo" value="Portafolio"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Referencia del Equipo</label>
+                <input class="field-input" id="f-referencia" value="N/A"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Centro de Costo</label>
+                <input class="field-input" id="f-costo" value=""/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Estado</label>
+                <select class="field-select" id="f-estado">
+                  <option>En curso</option><option>Completado</option><option>Aprobado</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Avance (%)</label>
+                <input class="field-input" id="f-avance" value="100%"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Fecha del Ensayo</label>
+                <input class="field-input" id="f-fecha" type="date"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Palabras Clave</label>
+                <input class="field-input" id="f-palabras" value="Vibración, RPM, FFT, Acelerómetro"/>
+              </div>
+            </div>
+          </div>
 
-    btnLogin.addEventListener('click', () => {
-      if (passwordInput.value === PASSWORD_APP) {
-        sessionStorage.setItem('autenticado', 'true');
-        loginScreen.classList.add('hidden');
-      } else {
-        loginError.classList.remove('hidden');
+          <div class="tab-panel" id="tab-contenido">
+            <div class="field-group">
+              <label class="field-label">Objetivo del Ensayo</label>
+              <textarea class="field-textarea" id="f-objetivo">Determinar con exactitud la velocidad angular de régimen (RPM) mediante análisis FFT de señales de vibración.</textarea>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Aspectos Preliminares</label>
+              <textarea class="field-textarea" id="f-aspectos">Se realizó la caracterización dinámica del equipo bajo análisis conectando un acelerómetro uniaxial al artefacto en condición operativa.</textarea>
+            </div>
+            <div class="form-grid-2">
+              <div class="field-group">
+                <label class="field-label">Conclusiones</label>
+                <textarea class="field-textarea" id="f-conclusiones">Las mediciones se realizaron satisfactoriamente.</textarea>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Observaciones</label>
+                <textarea class="field-textarea" id="f-observaciones">Se recomienda continuar el monitoreo periódico de los niveles de vibración.</textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-resp">
+            <div class="form-grid-3">
+              <div class="field-group">
+                <label class="field-label">Realizó (Técnico)</label>
+                <input class="field-input" id="f-realizo" value="Técnico de Ensayos"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Revisó (Ingeniero)</label>
+                <input class="field-input" id="f-reviso" value="Ing. Vibraciones"/>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Aprobó (Líder)</label>
+                <input class="field-input" id="f-aprobo" value="Director de Laboratorio"/>
+              </div>
+            </div>
+          </div>
+
+          <div class="action-bar">
+            <button class="btn-action btn-gen" onclick="generarInforme()">⚡ Generar Informe LaTeX (.tex)</button>
+            <button class="btn-action btn-action btn-gen" style="background:linear-gradient(135deg,#1a7f4e,#27ae60);"
+                    onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+          </div>
+          <div id="latex-download-wrap" style="display:none;margin-top:12px;"></div>
+        </div>
+
+        <!-- ── Placeholder vacío ──────────────────────────────── -->
+        <div id="empty-state" class="banner info" style="text-align:center;padding:36px 20px;">
+          <div style="font-size:2.8rem;margin-bottom:12px;">📁</div>
+          <strong>Sube al menos un archivo CSV o usa el botón Demo</strong><br>
+          <span style="font-size:0.8rem;opacity:0.8;">La plataforma procesará y visualizará los espectros FFT automáticamente.</span>
+        </div>
+
+      </main>
+    </div><!-- /layout-grid -->
+  </div><!-- /main-container -->
+</div><!-- /app -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════════ -->
+<script>
+// ─── Autenticación ──────────────────────────────────────────────
+const PASS = 'tecnico2026';
+function doLogin() {
+  const v = document.getElementById('pwd-input').value;
+  const err = document.getElementById('login-error');
+  if (v === PASS) {
+    sessionStorage.setItem('auth', '1');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    err.style.display = 'none';
+    initFecha();
+  } else {
+    err.style.display = 'block';
+  }
+}
+function doLogout() {
+  sessionStorage.removeItem('auth');
+  location.reload();
+}
+if (sessionStorage.getItem('auth') === '1') {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+document.getElementById('pwd-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+function initFecha() {
+  const d = new Date();
+  document.getElementById('f-fecha').valueAsDate = d;
+}
+initFecha();
+
+// ─── Estado Global ──────────────────────────────────────────────
+const DATOS = [null, null, null, null]; // slots 1–4
+const RESULTS = [null, null, null, null];
+const COLORES = ['#1F497D', '#2980b9', '#1a7f4e', '#6f42c1'];
+const COLOR_DIFF = '#c0392b';
+
+function updateF1x() {
+  const rpmN = parseFloat(document.getElementById('rpm-nominal').value) || 1750;
+  document.getElementById('f1x-note').textContent = `Frecuencia 1X: ${(rpmN/60).toFixed(2)} Hz`;
+}
+
+// ─── FFT (Cooley–Tukey Radix-2) ─────────────────────────────────
+function nextPow2(n) {
+  let p = 1; while (p < n) p <<= 1; return p;
+}
+function fft(re, im) {
+  const N = re.length;
+  if (N <= 1) return;
+  const re_e = new Float64Array(N/2), im_e = new Float64Array(N/2);
+  const re_o = new Float64Array(N/2), im_o = new Float64Array(N/2);
+  for (let i = 0; i < N/2; i++) {
+    re_e[i] = re[2*i]; im_e[i] = im[2*i];
+    re_o[i] = re[2*i+1]; im_o[i] = im[2*i+1];
+  }
+  fft(re_e, im_e); fft(re_o, im_o);
+  for (let k = 0; k < N/2; k++) {
+    const theta = -2 * Math.PI * k / N;
+    const wr = Math.cos(theta), wi = Math.sin(theta);
+    const or = wr*re_o[k] - wi*im_o[k];
+    const oi = wr*im_o[k] + wi*re_o[k];
+    re[k]     = re_e[k] + or; im[k]     = im_e[k] + oi;
+    re[k+N/2] = re_e[k] - or; im[k+N/2] = im_e[k] - oi;
+  }
+}
+
+function calcularFFT(signal, sr, fmax) {
+  const L   = signal.length;
+  const rms = Math.sqrt(signal.reduce((a, v) => a + v*v, 0) / L);
+  const N   = nextPow2(L);
+  const re  = new Float64Array(N);
+  const im  = new Float64Array(N);
+  for (let i = 0; i < L; i++) re[i] = signal[i];
+  fft(re, im);
+  const half = N/2 + 1;
+  const f    = new Float64Array(half);
+  const spec = new Float64Array(half);
+  for (let i = 0; i < half; i++) {
+    f[i]    = i * sr / N;
+    spec[i] = 2 * Math.sqrt(re[i]*re[i] + im[i]*im[i]) / L;
+  }
+  const mask_i = [];
+  for (let i = 0; i < half; i++) if (f[i] <= fmax) mask_i.push(i);
+  const ff = Float64Array.from(mask_i.map(i => f[i]));
+  const ss = Float64Array.from(mask_i.map(i => spec[i]));
+  return { f: ff, spec: ss, rms };
+}
+
+function detectarPico(f, spec, f_obj, tol, minPct) {
+  const maxAmp = Math.max(...spec);
+  const minH   = maxAmp * minPct / 100;
+  let best = null, bestAmp = 0;
+  for (let i = 1; i < spec.length - 1; i++) {
+    if (spec[i] >= minH && spec[i] > spec[i-1] && spec[i] > spec[i+1]) {
+      if (Math.abs(f[i] - f_obj) <= tol && spec[i] > bestAmp) {
+        best = { f: f[i], amp: spec[i] };
+        bestAmp = spec[i];
       }
-    });
-    passwordInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') btnLogin.click();
-    });
-
-    btnLogout.addEventListener('click', () => {
-      sessionStorage.removeItem('autenticado');
-      window.location.reload();
-    });
-
-    // 2. ESTADO GLOBAL
-    let slotsData = {
-      1: null,
-      2: null,
-      3: null,
-      4: null
-    };
-
-    const rpmNominalInput = document.getElementById('rpmNominal');
-    const fRotLabel = document.getElementById('fRotLabel');
-    const fsInput = document.getElementById('fsInput');
-    const freqplotInput = document.getElementById('freqplotInput');
-    const toleranciaInput = document.getElementById('toleranciaInput');
-    const sensibilidadInput = document.getElementById('sensibilidadInput');
-    const sensibilidadVal = document.getElementById('sensibilidadVal');
-    const labelRangoFreq = document.getElementById('labelRangoFreq');
-    const btnDemo = document.getElementById('btnDemo');
-
-    function updateFRot() {
-      const rpm = parseFloat(rpmNominalInput.value) || 0;
-      fRotLabel.textContent = (rpm / 60.0).toFixed(2) + ' Hz';
-      labelRangoFreq.textContent = freqplotInput.value;
-      recalcularTodo();
     }
-    rpmNominalInput.addEventListener('input', updateFRot);
-    fsInput.addEventListener('input', recalcularTodo);
-    freqplotInput.addEventListener('input', updateFRot);
-    toleranciaInput.addEventListener('input', recalcularTodo);
-    sensibilidadInput.addEventListener('input', (e) => {
-      sensibilidadVal.textContent = e.target.value + '%';
-      recalcularTodo();
-    });
+  }
+  return best;
+}
 
-    // Manejo de slots individuales
-    function handleSingleSlot(input, slotNumber, tipo) {
-      if (!input.files || input.files.length === 0) return;
-      const file = input.files[0];
-      Papa.parse(file, {
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        complete: function(res) {
-          if (res.data && res.data.length > 0) {
-            let startRow = isNaN(Number(res.data[0][0])) ? 1 : 0;
-            const col = [];
-            for (let i = startRow; i < res.data.length; i++) {
-              const val = parseFloat(res.data[i][0]);
-              if (!isNaN(val)) col.push(val);
-            }
-            if (col.length >= 10) {
-              slotsData[slotNumber] = {
-                nombre: file.name,
-                tipo: tipo,
-                slot: slotNumber,
-                data: new Float64Array(col)
-              };
-              document.getElementById(`labelSlot${slotNumber}`).textContent = file.name.substring(0, 16) + '...';
-              document.getElementById(`labelSlot${slotNumber}`).classList.add('text-emerald-600', 'font-semibold');
-              recalcularTodo();
-            }
-          }
-        }
+// ─── Carga de archivos ──────────────────────────────────────────
+function cargarArchivo(slot, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const parsed = Papa.parse(e.target.result, { skipEmptyLines: true });
+    const rows = parsed.data;
+    const signal = [];
+    for (const row of rows) {
+      const v = parseFloat((row[0]+'').replace(',', '.'));
+      if (!isNaN(v)) signal.push(v);
+    }
+    if (signal.length < 10) {
+      alert(`Slot ${slot}: No se pudieron leer datos del CSV.`); return;
+    }
+    DATOS[slot-1] = { nombre: file.name, signal, tipo: slot === 4 ? 'diferente' : 'base' };
+    const box = document.getElementById(`slot-${slot}`);
+    box.classList.add('loaded');
+    const st = document.getElementById(`status-${slot}`);
+    st.style.display = 'block';
+    st.textContent = `✅ ${file.name} (${signal.length.toLocaleString()} muestras)`;
+  };
+  reader.readAsText(file);
+}
+
+// ─── Demo sintético ─────────────────────────────────────────────
+function cargarDemo() {
+  const rpmN = parseFloat(document.getElementById('rpm-nominal').value) || 1750;
+  const sr   = parseFloat(document.getElementById('fs-val').value)      || 11628;
+  const fN   = rpmN / 60;
+  const L    = Math.floor(sr * 1.5);
+  const t    = Array.from({length: L}, (_, i) => i / sr);
+
+  const genSig = (fr, noise=0.04) =>
+    t.map(ti => 0.45*Math.sin(2*Math.PI*fr*ti)
+              + 0.18*Math.sin(2*Math.PI*2*fr*ti)
+              + 0.08*Math.sin(2*Math.PI*3*fr*ti)
+              + (Math.random()-0.5)*2*noise);
+
+  for (let i = 0; i < 3; i++) {
+    const fr = fN * (1 + (Math.random()-0.5)*0.002);
+    DATOS[i] = { nombre: `Demo_Medicion_${i+1}.csv`, signal: genSig(fr), tipo: 'base' };
+    const box = document.getElementById(`slot-${i+1}`);
+    box.classList.add('loaded');
+    const st  = document.getElementById(`status-${i+1}`);
+    st.style.display = 'block';
+    st.textContent = `✅ Demo_Medicion_${i+1}.csv (${L.toLocaleString()} muestras)`;
+  }
+  // Medición 4 diferente (90% del nominal)
+  const fr4  = fN * 0.92;
+  DATOS[3] = { nombre: 'Demo_Medicion_4_diferente.csv', signal: genSig(fr4, 0.05), tipo: 'diferente' };
+  const box4 = document.getElementById('slot-4');
+  box4.classList.add('loaded');
+  const st4  = document.getElementById('status-4');
+  st4.style.display = 'block';
+  st4.textContent = `✅ Demo_Medicion_4_diferente.csv (${L.toLocaleString()} muestras)`;
+}
+
+function resetTodo() {
+  for (let i = 0; i < 4; i++) { DATOS[i] = null; RESULTS[i] = null; }
+  ['1','2','3','4'].forEach(n => {
+    document.getElementById(`slot-${n}`).classList.remove('loaded');
+    const st = document.getElementById(`status-${n}`);
+    st.style.display = 'none'; st.textContent = '';
+  });
+  ['kpi-grid','charts-section','results-table-wrap','report-section'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('empty-state').style.display = '';
+  document.getElementById('diagnostico-banner').style.display = 'none';
+}
+
+// ─── Tabs ────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('onclick').includes(name));
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+// ─── Procesamiento principal ─────────────────────────────────────
+function procesarTodo() {
+  const cargados = DATOS.filter(Boolean);
+  if (!cargados.length) {
+    alert('Carga al menos un archivo CSV antes de procesar.'); return;
+  }
+
+  const rpmN   = parseFloat(document.getElementById('rpm-nominal').value) || 1750;
+  const sr     = parseFloat(document.getElementById('fs-val').value)      || 11628;
+  const fmax   = parseFloat(document.getElementById('freqplot').value)    || 200;
+  const tolHz  = parseFloat(document.getElementById('tol-hz').value)      || 1.5;
+  const sensPct= parseFloat(document.getElementById('sens-pct').value)    || 10;
+  const nArm   = parseInt(document.getElementById('n-arm').value)         || 3;
+  const f_obj  = rpmN / 60;
+
+  // Calcular FFT para cada slot
+  const procesados = [];
+  for (let i = 0; i < 4; i++) {
+    if (!DATOS[i]) continue;
+    const { f, spec, rms } = calcularFFT(DATOS[i].signal, sr, fmax);
+    const pico = detectarPico(f, spec, f_obj, tolHz, sensPct);
+    const rpm  = pico ? pico.f * 60 : null;
+    procesados.push({
+      slot: i+1, nombre: DATOS[i].nombre, tipo: DATOS[i].tipo,
+      f, spec, rms, pico, rpm,
+      color: DATOS[i].tipo === 'diferente' ? COLOR_DIFF : COLORES[Math.min(i, 3)]
+    });
+    RESULTS[i] = { ...procesados[procesados.length-1] };
+  }
+
+  const base = procesados.filter(p => p.tipo === 'base');
+  const diff = procesados.find(p => p.tipo === 'diferente') || null;
+
+  const rpms_v   = base.filter(p => p.rpm).map(p => p.rpm);
+  const rpm_prom = rpms_v.length ? rpms_v.reduce((a,b)=>a+b)/rpms_v.length : null;
+  const rpm_std  = rpms_v.length > 1
+    ? Math.sqrt(rpms_v.reduce((s,v)=>s+(v-rpm_prom)**2,0)/(rpms_v.length-1)) : 0;
+  const rms_prom = base.length ? base.reduce((s,p)=>s+p.rms,0)/base.length : 0;
+
+  // ── KPIs ────────────────────────────────────────────────────────
+  document.getElementById('kpi-grid').style.display = 'grid';
+  if (rpm_prom) {
+    document.getElementById('kpi-rpm').textContent = rpm_prom.toFixed(1);
+    document.getElementById('kpi-freq').textContent = `Frec. 1X: ${(rpm_prom/60).toFixed(2)} Hz`;
+    const delta = ((rpm_prom - rpmN) / rpmN * 100);
+    document.getElementById('kpi-delta').textContent =
+      `Δ respecto a nominal: ${delta > 0 ? '+' : ''}${delta.toFixed(2)}%`;
+  } else {
+    document.getElementById('kpi-rpm').textContent = '— —';
+    document.getElementById('kpi-freq').textContent = 'Sin pico detectado';
+  }
+  document.getElementById('kpi-disp').textContent  = rpms_v.length > 1 ? `±${rpm_std.toFixed(1)} RPM` : (rpms_v.length === 1 ? '1 medición' : '—');
+  document.getElementById('kpi-rms').textContent   = rms_prom.toFixed(4);
+  document.getElementById('kpi-coher').textContent = `${rpms_v.length}/${base.length}`;
+  document.getElementById('kpi-subtotal').textContent = `${procesados.length} archivo(s) · ${diff ? 1 : 0} cond. diferente`;
+
+  // ── Banner diagnóstico ─────────────────────────────────────────
+  const banner = document.getElementById('diagnostico-banner');
+  banner.style.display = 'block';
+  if (diff && diff.rpm && rpm_prom) {
+    const delta = rpm_prom - diff.rpm;
+    const pct   = Math.abs(delta / rpm_prom * 100);
+    if (delta > 0) {
+      banner.innerHTML = `<div class="banner ok">🎯 <strong>DIAGNÓSTICO — DIFERENCIA CONFIRMADA:</strong><br>
+        Mediciones base: <strong>${rpm_prom.toFixed(1)} RPM</strong> · Medición 4: <strong>${diff.rpm.toFixed(1)} RPM</strong>
+        — reducción de <strong>${delta.toFixed(1)} RPM (${pct.toFixed(1)}%)</strong>.<br>
+        ✅ El pico corresponde a la rotación mecánica real del eje.</div>`;
+    } else {
+      banner.innerHTML = `<div class="banner warn">⚠️ Medición 4: <strong>${diff.rpm.toFixed(1)} RPM</strong>
+        (diferencia de ${Math.abs(delta).toFixed(1)} RPM respecto a la base).</div>`;
+    }
+  } else if (rpm_prom) {
+    banner.innerHTML = `<div class="banner info">✅ Mediciones base procesadas: <strong>${rpm_prom.toFixed(1)} RPM</strong> promedio. 
+      Carga una Medición 4 para validar el pico.</div>`;
+  } else {
+    banner.innerHTML = `<div class="banner warn">⚠️ No se detectó pico en ninguna medición. Ajusta los parámetros de detección.</div>`;
+  }
+
+  // ── Gráficos apilados ──────────────────────────────────────────
+  document.getElementById('charts-section').style.display = 'block';
+  document.getElementById('charts-caption').textContent =
+    `Rango: 0–${fmax} Hz · Referencia 1X: ${f_obj.toFixed(2)} Hz (${rpmN.toFixed(0)} RPM nominal)`;
+
+  const armLines = (fmax_v) => {
+    const shapes = [], annotations = [];
+    for (let n = 1; n <= nArm; n++) {
+      const fa = f_obj * n;
+      if (fa > fmax_v) break;
+      shapes.push({ type: 'line', x0: fa, x1: fa, y0: 0, y1: 1,
+                    yref: 'paper', line: { color: '#aaa', width: 1, dash: 'dot' } });
+      annotations.push({ x: fa, y: 0.98, yref: 'paper', text: `${n}X`,
+                          showarrow: false, font: { size: 9, color: '#888' }, xanchor: 'left' });
+    }
+    return { shapes, annotations };
+  };
+
+  const LAYOUT_BASE = {
+    margin: { l: 55, r: 20, t: 48, b: 48 },
+    paper_bgcolor: 'white', plot_bgcolor: 'white',
+    xaxis: { title: 'Frecuencia [Hz]', gridcolor: '#e8edf3', linecolor: '#c5d0dc', range: [0, fmax] },
+    yaxis: { title: 'Amplitud [m/s²]', gridcolor: '#e8edf3', linecolor: '#c5d0dc' },
+    hovermode: 'x unified', showlegend: true,
+    legend: { orientation: 'h', x: 1, xanchor: 'right', y: 1.12, font: { size: 10 } }
+  };
+
+  // Limpiar gráficos previos
+  for (let s = 1; s <= 4; s++) {
+    document.getElementById(`chart-${s}-wrap`).style.display = 'none';
+    Plotly.purge(`chart-${s}`);
+  }
+  document.getElementById('chart-sup-wrap').style.display = 'none';
+  Plotly.purge('chart-sup');
+
+  for (const p of procesados) {
+    const wrap = document.getElementById(`chart-${p.slot}-wrap`);
+    wrap.style.display = 'block';
+    const tipo_lbl = p.tipo === 'diferente' ? 'Condición Diferente' : 'Condición Base';
+    const rpm_lbl  = p.rpm ? `${p.rpm.toFixed(1)} RPM` : 'Sin pico detectado';
+    document.getElementById(`chart-${p.slot}-title`).textContent =
+      `Medición ${p.slot} — ${tipo_lbl} · ${rpm_lbl} · RMS ${p.rms.toFixed(4)} m/s²`;
+
+    const traces = [{
+      x: Array.from(p.f), y: Array.from(p.spec), mode: 'lines', name: 'FFT',
+      line: { color: p.color, width: 1.8 },
+      hovertemplate: '<b>%{x:.2f} Hz</b><br>Amp: %{y:.5f}<extra></extra>'
+    }];
+
+    if (p.pico) {
+      traces.push({
+        x: [p.pico.f], y: [p.pico.amp], mode: 'markers+text', name: '1X detectado',
+        marker: { color: '#c0392b', size: 10, symbol: 'x', line: { width: 2 } },
+        text: [`<b>${p.pico.f.toFixed(2)} Hz<br>${p.rpm.toFixed(0)} RPM</b>`],
+        textposition: 'top center', textfont: { size: 10, color: '#c0392b' }
       });
     }
 
-    // Demo
-    btnDemo.addEventListener('click', () => {
-      const fs = parseFloat(fsInput.value) || 11628;
-      const L = Math.floor(fs * 1.5);
-      const f_reales = [29.14, 29.16, 29.13];
-
-      f_reales.forEach((fr, i) => {
-        const d = new Float64Array(L);
-        for (let j = 0; j < L; j++) {
-          const t = j / fs;
-          d[j] = 0.45 * Math.sin(2 * Math.PI * fr * t) + 0.18 * Math.sin(2 * Math.PI * 2 * fr * t) + 0.08 * Math.sin(2 * Math.PI * 3 * fr * t) + 0.04 * (Math.random() - 0.5);
-        }
-        slotsData[i + 1] = {
-          nombre: `Demo_Vacio_${i + 1}.csv`,
-          tipo: 'vacio',
-          slot: i + 1,
-          data: d
-        };
-        document.getElementById(`labelSlot${i + 1}`).textContent = `Demo_${i + 1}.csv`;
-        document.getElementById(`labelSlot${i + 1}`).classList.add('text-emerald-600', 'font-semibold');
-      });
-
-      // Con Carga
-      const d_c = new Float64Array(L);
-      const f_c = 27.0;
-      for (let j = 0; j < L; j++) {
-        const t = j / fs;
-        d_c[j] = 0.38 * Math.sin(2 * Math.PI * f_c * t) + 0.22 * Math.sin(2 * Math.PI * 2 * f_c * t) + 0.05 * (Math.random() - 0.5);
-      }
-      slotsData[4] = {
-        nombre: 'Demo_Carga_Agua.csv',
-        tipo: 'carga',
-        slot: 4,
-        data: d_c
-      };
-      document.getElementById('labelSlot4').textContent = 'Demo_Carga.csv';
-      document.getElementById('labelSlot4').classList.add('text-rose-600', 'font-semibold');
-
-      recalcularTodo();
+    const { shapes, annotations } = armLines(fmax);
+    Plotly.newPlot(`chart-${p.slot}`, traces, {
+      ...LAYOUT_BASE,
+      title: { text: `<b>Medición ${p.slot} — ${tipo_lbl}</b>`, font: { size: 12, color: '#0f2444' } },
+      shapes, annotations
     });
+  }
 
-    // FFT Cooley-Tukey
-    function nextPowerOfTwo(n) {
-      let p = 1;
-      while (p < n) p <<= 1;
-      return p;
-    }
+  // Gráfico 5 — Superposición
+  if (procesados.length >= 2) {
+    document.getElementById('chart-sup-wrap').style.display = 'block';
+    const sup_traces = procesados.map(p => ({
+      x: Array.from(p.f), y: Array.from(p.spec), mode: 'lines',
+      name: `Med. ${p.slot} (${p.tipo==='diferente'?'Dif.':'Base'}) · ${p.rpm ? p.rpm.toFixed(1)+' RPM' : 'sin pico'}`,
+      line: { color: p.color, width: 1.6, dash: p.tipo === 'diferente' ? 'dash' : 'solid' },
+      hovertemplate: `<b>Med. ${p.slot}</b> %{x:.2f} Hz · %{y:.5f}<extra></extra>`
+    }));
+    const { shapes: sh2, annotations: an2 } = armLines(fmax);
+    Plotly.newPlot('chart-sup', sup_traces, {
+      ...LAYOUT_BASE,
+      title: { text: '<b>Superposición de Todos los Espectros FFT</b>', font: { size: 12, color: '#0f2444' } },
+      height: 380,
+      legend: { orientation: 'h', y: -0.25, x: 0, font: { size: 10 } },
+      shapes: sh2, annotations: an2
+    });
+  }
 
-    function fftRadix2(real, imag) {
-      const n = real.length;
-      let j = 0;
-      for (let i = 0; i < n - 1; i++) {
-        if (i < j) {
-          let tempR = real[i]; real[i] = real[j]; real[j] = tempR;
-          let tempI = imag[i]; imag[i] = imag[j]; imag[j] = tempI;
-        }
-        let k = n >> 1;
-        while (k <= j) {
-          j -= k;
-          k >>= 1;
-        }
-        j += k;
-      }
-      for (let l = 2; l <= n; l <<= 1) {
-        const halfL = l >> 1;
-        const theta = -2 * Math.PI / l;
-        const wStepR = Math.cos(theta);
-        const wStepI = Math.sin(theta);
-        for (let i = 0; i < n; i += l) {
-          let wR = 1.0;
-          let wI = 0.0;
-          for (let m = 0; m < halfL; m++) {
-            const idx1 = i + m;
-            const idx2 = idx1 + halfL;
-            const uR = real[idx1];
-            const uI = imag[idx1];
-            const tR = wR * real[idx2] - wI * imag[idx2];
-            const tI = wR * imag[idx2] + wI * real[idx2];
-            real[idx1] = uR + tR;
-            imag[idx1] = uI + tI;
-            real[idx2] = uR - tR;
-            imag[idx2] = uI - tI;
-            const nextWR = wR * wStepR - wI * wStepI;
-            wI = wR * wStepI + wI * wStepR;
-            wR = nextWR;
-          }
-        }
-      }
-    }
+  // ── Tabla de resultados ─────────────────────────────────────────
+  document.getElementById('results-table-wrap').style.display = 'block';
+  const tbody = document.getElementById('results-tbody');
+  tbody.innerHTML = '';
+  for (const p of procesados) {
+    const tr = document.createElement('tr');
+    const tipo_badge = p.tipo === 'diferente'
+      ? '<span style="color:#c0392b;font-weight:700;">Dif.</span>'
+      : '<span style="color:#1F497D;">Base</span>';
+    tr.innerHTML = `
+      <td>Medición ${p.slot} ${tipo_badge}</td>
+      <td style="font-size:0.75rem;">${p.nombre}</td>
+      <td>${p.pico ? p.pico.f.toFixed(2) : '—'}</td>
+      <td class="${p.rpm ? 'rpm-cell' : 'warn-cell'}">${p.rpm ? p.rpm.toFixed(1) : 'No detectado'}</td>
+      <td>${p.pico ? p.pico.amp.toFixed(5) : '—'}</td>
+      <td>${p.rms.toFixed(5)}</td>`;
+    tbody.appendChild(tr);
+  }
 
-    function computeFFT(dataArr, fs, freqplot) {
-      const L = dataArr.length;
-      let sum = 0;
-      for (let i = 0; i < L; i++) sum += dataArr[i];
-      const mean = sum / L;
-      let sumSq = 0;
-      for (let i = 0; i < L; i++) sumSq += (dataArr[i] - mean) ** 2;
-      const rms = Math.sqrt(sumSq / (L - 1));
+  // ── Mostrar sección de informe ──────────────────────────────────
+  document.getElementById('report-section').style.display = 'block';
+  document.getElementById('empty-state').style.display = 'none';
 
-      const NFFT = nextPowerOfTwo(L);
-      const real = new Float64Array(NFFT);
-      const imag = new Float64Array(NFFT);
-      for (let i = 0; i < L; i++) real[i] = dataArr[i];
-      fftRadix2(real, imag);
+  // Actualizar campo de conclusiones con datos reales
+  if (rpm_prom) {
+    document.getElementById('f-conclusiones').value =
+      `La velocidad de rotación en condición base del equipo se determinó en ${rpm_prom.toFixed(1)} RPM ` +
+      `(${(rpm_prom/60).toFixed(2)} Hz). Dispersión: ±${rpm_std.toFixed(2)} RPM. RMS promedio: ${rms_prom.toFixed(4)} m/s².`;
+  }
 
-      const halfN = NFFT / 2;
-      const fPlot = [];
-      const espPlot = [];
-      let maxA = 0;
-      for (let i = 0; i <= halfN; i++) {
-        const f = (fs / 2) * (i / halfN);
-        if (f > freqplot) break;
-        const mag = (2 * Math.sqrt(real[i] * real[i] + imag[i] * imag[i])) / L;
-        fPlot.push(f);
-        espPlot.push(mag);
-        if (mag > maxA) maxA = mag;
-      }
-      return { fPlot, espPlot, rms, maxA };
-    }
+  // Guardar para LaTeX
+  window._procesados = procesados;
+  window._stats = { rpm_prom, rpm_std, rms_prom, rpmN, sr, fmax, tolHz };
+}
 
-    function recalcularTodo() {
-      const fs = parseFloat(fsInput.value) || 11628;
-      const rpmNominal = parseFloat(rpmNominalInput.value) || 1750;
-      const fRot = rpmNominal / 60.0;
-      const freqplot = parseFloat(freqplotInput.value) || 200;
-      const tolHz = parseFloat(toleranciaInput.value) || 1.5;
-      const sensPct = (parseFloat(sensibilidadInput.value) || 10) / 100.0;
+// ─── Generar LaTeX ──────────────────────────────────────────────
+function generarInforme() {
+  const proc = window._procesados;
+  const st   = window._stats;
+  if (!proc) { alert('Primero procesa las mediciones.'); return; }
 
-      labelRangoFreq.textContent = freqplot;
+  const meta = {
+    proyecto:    document.getElementById('f-proyecto').value,
+    modulo:      document.getElementById('f-modulo').value,
+    categoria:   document.getElementById('f-categoria').value,
+    tipo_proy:   document.getElementById('f-tipo').value,
+    referencia:  document.getElementById('f-referencia').value,
+    costo:       document.getElementById('f-costo').value,
+    estado:      document.getElementById('f-estado').value,
+    avance:      document.getElementById('f-avance').value,
+    fecha:       document.getElementById('f-fecha').value.split('-').reverse().join('/'),
+    palabras:    document.getElementById('f-palabras').value,
+    objetivo:    document.getElementById('f-objetivo').value,
+    aspectos:    document.getElementById('f-aspectos').value,
+    conclusiones:document.getElementById('f-conclusiones').value,
+    observaciones:document.getElementById('f-observaciones').value,
+    realizo:     document.getElementById('f-realizo').value,
+    reviso:      document.getElementById('f-reviso').value,
+    aprobo:      document.getElementById('f-aprobo').value,
+  };
 
-      const resultadosVacios = [];
-      let resCarga = null;
-      let totalActivos = 0;
+  const base = proc.filter(p => p.tipo === 'base');
+  const diff = proc.find(p => p.tipo === 'diferente') || null;
 
-      // Procesar cada slot (1 al 4)
-      for (let s = 1; s <= 4; s++) {
-        const slotObj = slotsData[s];
-        const box = document.getElementById(`slotPlotBox${s}`);
+  let rows_lat = '';
+  base.forEach((p, idx) => {
+    rows_lat += `    Medición ${idx+1} & ${p.pico?p.pico.f.toFixed(2):'—'} & ` +
+                `${p.rpm?p.rpm.toFixed(1):'No det.'} & ` +
+                `${p.pico?p.pico.amp.toFixed(4):'—'} & ${p.rms.toFixed(4)} \\\\\n    \\hline\n`;
+  });
+  if (diff) {
+    rows_lat += `    Medición 4 (Diferente) & ${diff.pico?diff.pico.f.toFixed(2):'—'} & ` +
+                `${diff.rpm?diff.rpm.toFixed(1):'No det.'} & ` +
+                `${diff.pico?diff.pico.amp.toFixed(4):'—'} & ${diff.rms.toFixed(4)} \\\\\n    \\hline\n`;
+  }
 
-        if (!slotObj) {
-          box.innerHTML = `<div class="py-12 text-slate-400">Slot ${s}: Sin datos cargados</div>`;
-          continue;
-        }
+  const rpm_str = st.rpm_prom ? `${st.rpm_prom.toFixed(1)} RPM` : 'No determinado';
 
-        totalActivos++;
-        const { fPlot, espPlot, rms, maxA } = computeFFT(slotObj.data, fs, freqplot);
-
-        // Picos
-        const minP = maxA * sensPct;
-        const peaks = [];
-        for (let i = 1; i < espPlot.length - 1; i++) {
-          if (espPlot[i] > espPlot[i - 1] && espPlot[i] > espPlot[i + 1] && espPlot[i] >= minP) {
-            peaks.push({ f: fPlot[i], amp: espPlot[i] });
-          }
-        }
-        peaks.sort((a, b) => b.amp - a.amp);
-
-        let match1X = null;
-        let rpmMedida = null;
-
-        if (slotObj.tipo === 'vacio') {
-          match1X = peaks.find(p => Math.abs(p.f - fRot) <= tolHz);
-          if (match1X) {
-            rpmMedida = match1X.f * 60.0;
-            resultadosVacios.push({ slot: s, f1X: match1X.f, amp1X: match1X.amp, rpm: rpmMedida, rms: rms });
-          }
-        } else {
-          // Con carga: buscar pico desplazado a menor frecuencia
-          const picosSub = peaks.filter(p => p.f >= fRot * 0.4 && p.f <= fRot * 0.98);
-          if (picosSub.length > 0) {
-            match1X = picosSub[0];
-            rpmMedida = match1X.f * 60.0;
-            resCarga = { slot: 4, fCarga: match1X.f, ampCarga: match1X.amp, rpmCarga: rpmMedida, rms: rms };
-          }
-        }
-
-        // Graficar individualmente en el Slot
-        box.innerHTML = `<div id="plot_s_${s}" class="w-full h-64"></div>`;
-        const colLine = s === 4 ? '#dc2626' : (s === 1 ? '#2563eb' : (s === 2 ? '#0284c7' : '#0d9488'));
-
-        const traces = [{
-          x: fPlot, y: espPlot, mode: 'lines',
-          line: { color: colLine, width: 1.5 },
-          name: `Slot ${s}`
-        }];
-
-        if (match1X) {
-          traces.push({
-            x: [match1X.f], y: [match1X.amp], mode: 'markers+text',
-            marker: { color: 'red', size: 7, symbol: 'x' },
-            text: [`${match1X.f.toFixed(1)} Hz (${rpmMedida.toFixed(0)} RPM)`],
-            textposition: 'top center',
-            textfont: { size: 9, color: 'darkred' },
-            showlegend: false
-          });
-        }
-
-        // Líneas verticales armónicas
-        const shapes = [];
-        for (let n = 1; n <= 3; n++) {
-          const fa = fRot * n;
-          if (fa <= freqplot) {
-            shapes.push({
-              type: 'line', x0: fa, x1: fa, y0: 0, y1: maxA * 1.05,
-              line: { color: '#888888', width: 1, dash: 'dot' }
-            });
-          }
-        }
-
-        const titulo = `Slot ${s} (${s === 4 ? 'Con Carga' : 'Vacío'}) | ${rpmMedida ? rpmMedida.toFixed(1) + ' RPM' : 'Sin pico'} | RMS: ${rms.toFixed(3)}`;
-        Plotly.newPlot(`plot_s_${s}`, traces, {
-          title: { text: titulo, font: { size: 11 } },
-          margin: { l: 35, r: 15, t: 30, b: 30 },
-          xaxis: { title: 'Frecuencia [Hz]', range: [0, freqplot] },
-          yaxis: { title: 'Amplitud [m/s²]' },
-          shapes: shapes,
-          showlegend: false
-        }, { responsive: true, displaylogo: false });
-      }
-
-      document.getElementById('kpiEnsayosActivos').textContent = `${totalActivos} / 4`;
-
-      // KPIs globales
-      let rpmPromedio = null;
-      let stdRpm = 0;
-      if (resultadosVacios.length > 0) {
-        const sum = resultadosVacios.reduce((a, b) => a + b.rpm, 0);
-        rpmPromedio = sum / resultadosVacios.length;
-        if (resultadosVacios.length > 1) {
-          const varR = resultadosVacios.reduce((a, b) => a + Math.pow(b.rpm - rpmPromedio, 2), 0) / (resultadosVacios.length - 1);
-          stdRpm = Math.sqrt(varR);
-        }
-        document.getElementById('kpiRpmPromedio').textContent = rpmPromedio.toFixed(1);
-        document.getElementById('kpiFreqPromedio').textContent = `Frec: ${(rpmPromedio / 60.0).toFixed(2)} Hz`;
-        document.getElementById('kpiStdRpm').textContent = resultadosVacios.length > 1 ? `± ${stdRpm.toFixed(2)}` : '1 lectura';
-        const dNom = ((rpmPromedio - rpmNominal) / rpmNominal) * 100.0;
-        document.getElementById('kpiDeltaNominal').textContent = `Desv: ${dNom >= 0 ? '+' : ''}${dNom.toFixed(2)}%`;
-      } else if (resCarga) {
-        document.getElementById('kpiRpmPromedio').textContent = resCarga.rpmCarga.toFixed(1);
-        document.getElementById('kpiFreqPromedio').textContent = `Con Carga: ${resCarga.fCarga.toFixed(2)} Hz`;
-      } else {
-        document.getElementById('kpiRpmPromedio').textContent = '--';
-      }
-
-      // Banner diagnóstico
-      const banner = document.getElementById('statusBanner');
-      banner.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200', 'bg-blue-50', 'text-blue-800', 'border-blue-200');
-
-      if (resCarga && rpmPromedio && resCarga.rpmCarga < rpmPromedio) {
-        const caida = rpmPromedio - resCarga.rpmCarga;
-        banner.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
-        banner.innerHTML = `
-          🎯 <strong>¡VALIDACIÓN EXITOSA CONFIRMADA!</strong><br>
-          Al aplicar carga, la velocidad de rotación cayó de <strong>${rpmPromedio.toFixed(1)} RPM</strong> a <strong>${resCarga.rpmCarga.toFixed(1)} RPM</strong> 
-          (-${caida.toFixed(1)} RPM). Esto ratifica con certeza que el punto medido es la velocidad real del eje y no una perturbación eléctrica de 60 Hz.
-        `;
-      } else if (rpmPromedio) {
-        banner.classList.add('bg-blue-50', 'text-blue-800', 'border-blue-200');
-        banner.innerHTML = `
-          ✅ <strong>Medición Lista:</strong> Velocidad promedio calculada en <strong>${rpmPromedio.toFixed(1)} RPM</strong>.
-        `;
-      }
-    }
-
-    // Descarga de LaTeX
-    document.getElementById('btnDescargarLatex').addEventListener('click', () => {
-      const proj = document.getElementById('infProyecto').value;
-      const ref = document.getElementById('infReferencia').value;
-      const tex = `% INFORME TECNICO DE VIBRACIONES Y MEDICION DE RPM
-\\documentclass[11pt,a4paper]{article}
+  const tex = `\\documentclass[11pt,letterpaper]{article}
 \\usepackage[utf8]{inputenc}
 \\usepackage[spanish]{babel}
-\\usepackage{geometry}
-\\geometry{top=2cm, bottom=2cm, left=2.2cm, right=2.2cm}
-\\usepackage{booktabs}
-\\title{INFORME TECNICO - MEDICION DE RPM POR VIBRACION}
-\\author{${document.getElementById('infRealizo').value}}
-\\date{\\today}
+\\usepackage[top=2cm,bottom=2cm,left=2cm,right=2cm]{geometry}
+\\usepackage{booktabs,tabularx,xcolor,fancyhdr,array}
+\\definecolor{primary}{RGB}{31,73,125}
+\\definecolor{accent}{RGB}{79,129,189}
+\\pagestyle{fancy}\\fancyhf{}
+\\rhead{\\small INFORME TÉCNICO - MEDICIÓN DE RPM}
+\\lhead{\\small ${meta.proyecto}}
+\\rfoot{\\small Página \\thepage}
 \\begin{document}
-\\maketitle
-\\section{Metadatos}
-Proyecto: ${proj} \\\\
-Referencia: ${ref} \\\\
-\\section{Resultados}
-Frecuencia maxima de visualizacion: ${freqplotInput.value} Hz. \\\\
+
+% ─── ENCABEZADO ─────────────────────────────────────────────────
+\\begin{center}
+{\\LARGE\\bfseries\\color{primary} INFORME TÉCNICO}\\\\[4pt]
+{\\large ANÁLISIS DE VIBRACIONES Y DETERMINACIÓN DE RPM}\\\\[2pt]
+{\\small Fecha: ${meta.fecha}}
+\\end{center}
+\\vspace{8pt}
+
+% ─── TABLA 0: Módulo ────────────────────────────────────────────
+\\begin{tabular}{|p{2.5cm}|p{8cm}|p{2cm}|p{3cm}|}
+\\hline
+\\rowcolor[HTML]{F2F2F2}\\textbf{Módulo:} & ${meta.modulo} &
+\\cellcolor[HTML]{F2F2F2}\\textbf{Ref.:} & ${meta.referencia} \\\\
+\\hline
+\\end{tabular}
+\\vspace{4pt}
+
+% ─── TABLA 1: Metadatos ──────────────────────────────────────────
+\\begin{tabular}{|p{2.5cm}|p{3cm}|p{2.5cm}|p{3cm}|p{1.5cm}|p{2cm}|}
+\\hline
+\\rowcolor[HTML]{F2F2F2}\\textbf{Categoría} & ${meta.categoria} &
+\\rowcolor[HTML]{F2F2F2}\\textbf{Tipo Proy.} & ${meta.tipo_proy} &
+\\rowcolor[HTML]{F2F2F2}\\textbf{Fecha} & ${meta.fecha} \\\\
+\\hline
+\\rowcolor[HTML]{F2F2F2}\\textbf{Proyecto} & \\multicolumn{2}{c|}{${meta.proyecto}} &
+\\rowcolor[HTML]{F2F2F2}\\textbf{C. Costo} & \\multicolumn{2}{c|}{${meta.costo}} \\\\
+\\hline
+\\rowcolor[HTML]{F2F2F2}\\textbf{Avance} & ${meta.avance} &
+\\rowcolor[HTML]{F2F2F2}\\textbf{Estado} & ${meta.estado} &
+\\rowcolor[HTML]{F2F2F2}\\textbf{Resultado} & \\\\
+\\hline
+\\end{tabular}
+\\vspace{4pt}
+
+% ─── TABLA 2: Objetivo ───────────────────────────────────────────
+\\begin{tabular}{|p{2.5cm}|p{9cm}|p{4cm}|}
+\\hline
+\\rowcolor[HTML]{F2F2F2}\\textbf{Objetivo} & ${meta.objetivo} &
+\\rowcolor[HTML]{F2F2F2}\\textbf{Palabras clave:} ${meta.palabras} \\\\
+\\hline
+\\end{tabular}
+\\vspace{10pt}
+
+\\tableofcontents
+\\newpage
+
+\\section{Aspectos Preliminares}
+${meta.aspectos}
+
+\\section{Procedimientos Realizados}
+\\begin{tabular}{|l|c|c|}
+\\hline
+\\rowcolor[HTML]{1F497D}{\\color{white}\\textbf{Prueba}} &
+{\\color{white}\\textbf{No cumple}} &
+{\\color{white}\\textbf{Cumple}} \\\\
+\\hline
+Medición de vibración con acelerómetro & & X \\\\\\hline
+Análisis espectral FFT & & X \\\\\\hline
+\\end{tabular}
+
+\\section{Detalles Técnicos}
+\\textbf{Frecuencia de Muestreo (Fs):} ${st.sr} Hz \\quad
+\\textbf{RPM Nominal:} ${st.rpmN.toFixed(0)} RPM (${(st.rpmN/60).toFixed(2)} Hz) \\\\
+\\textbf{Rango Analizado:} 0--${st.fmax} Hz \\quad
+\\textbf{Tolerancia armónicos:} $\\pm${st.tolHz}$ Hz
+
+\\section{Resultados Obtenidos}
+\\begin{tabular}{|l|l|c|c|c|c|}
+\\hline
+\\rowcolor[HTML]{1F497D}
+{\\color{white}\\textbf{Ensayo}} &
+{\\color{white}\\textbf{Archivo}} &
+{\\color{white}\\textbf{Frec. 1X [Hz]}} &
+{\\color{white}\\textbf{RPM}} &
+{\\color{white}\\textbf{Amp. 1X}} &
+{\\color{white}\\textbf{RMS [m/s²]}} \\\\
+\\hline
+${rows_lat}\\end{tabular}
+
+\\vspace{6pt}
+\\textbf{RPM Promedio (base):} \\textcolor{primary}{\\textbf{${rpm_str}}} \\quad
+\\textbf{Dispersión:} $\\pm${st.rpm_std.toFixed(2)}$ RPM \\quad
+\\textbf{RMS Promedio:} ${st.rms_prom.toFixed(4)} m/s²
+
+\\section{Conclusiones}
+${meta.conclusiones}
+
+\\section{Observaciones}
+${meta.observaciones}
+
+\\section{Responsables}
+\\begin{center}
+\\begin{tabular}{p{4.5cm} p{4.5cm} p{4.5cm}}
+\\hline
+\\centering ${meta.realizo} & \\centering ${meta.reviso} & \\centering ${meta.aprobo} \\\\
+\\centering\\textbf{Realizó} & \\centering\\textbf{Revisó} & \\centering\\textbf{Aprobó} \\\\
+\\centering ${meta.fecha} & \\centering ${meta.fecha} & \\centering ${meta.fecha} \\\\
+\\end{tabular}
+\\end{center}
+
 \\end{document}`;
-      
-      const blob = new Blob([tex], { type: 'text/plain' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `Informe_${ref}.tex`;
-      a.click();
-    });
-  </script>
+
+  const blob  = new Blob([tex], { type: 'text/plain' });
+  const url   = URL.createObjectURL(blob);
+  const fecha_fn = new Date().toISOString().slice(0, 10).replace(/-/g,'');
+  const fname = `InformeTecnico_${meta.referencia || 'IT'}_${fecha_fn}.tex`;
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
+
+  document.getElementById('latex-download-wrap').style.display = 'none';
+}
+
+// ─── Enter en login ya está manejado arriba ───────────────────────
+</script>
 </body>
 </html>

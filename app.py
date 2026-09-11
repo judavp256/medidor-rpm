@@ -5,632 +5,715 @@ import plotly.graph_objects as go
 from scipy.signal import find_peaks
 import datetime
 
-# Importar generador de informes (PDF y LaTeX)
 try:
-    from report_generator import generar_imagen_fft, generar_pdf_reportlab, generar_codigo_latex
-    REPORTLAB_DISPONIBLE = True
-except Exception as e:
-    REPORTLAB_DISPONIBLE = False
+    from report_generator import (generar_imagen_fft, generar_imagen_superposicion,
+                                   generar_pdf_reportlab, generar_codigo_latex)
+    REPORTLAB_OK = True
+except Exception:
+    REPORTLAB_OK = False
 
-# Configuración de página
+# ── Configuración de página ─────────────────────────────────────
 st.set_page_config(
-    page_title="Analizador de RPM con Informe Técnico",
+    page_title="Analizador de RPM | Informe Técnico",
     page_icon="⚙️",
     layout="wide"
 )
 
-# Estilos CSS industriales
+# ── Paleta institucional (Formato_IT / tema Word) ───────────────
 st.markdown("""
 <style>
-    .metric-card {
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        padding: 14px;
-        border-left: 5px solid #28a745;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        text-align: center;
-    }
-    .metric-title {
-        font-size: 0.8rem;
-        color: #6c757d;
-        text-transform: uppercase;
-        font-weight: 600;
-        margin-bottom: 2px;
-    }
-    .metric-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #1a1a1a;
-    }
-    .metric-sub {
-        font-size: 0.8rem;
-        color: #495057;
-        margin-top: 2px;
-    }
-    .status-ok {
-        background-color: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-        padding: 14px;
-        border-radius: 8px;
-        font-weight: 500;
-    }
-    .status-alert {
-        background-color: #fff3cd;
-        color: #856404;
-        border: 1px solid #ffeeba;
-        padding: 14px;
-        border-radius: 8px;
-        font-weight: 500;
-    }
-    .privacy-badge {
-        font-size: 0.75rem;
-        color: #155724;
-        background-color: #d4edda;
-        padding: 4px 10px;
-        border-radius: 20px;
-        display: inline-block;
-        font-weight: 600;
-    }
-    .slot-box {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 10px;
-    }
+  /* ── Reset y fuente ── */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+  /* ── Barra lateral elegante ── */
+  [data-testid="stSidebar"] {
+    background: linear-gradient(160deg, #0f2444 0%, #1F497D 100%) !important;
+  }
+  [data-testid="stSidebar"] * { color: #e8edf3 !important; }
+  [data-testid="stSidebar"] .stSlider > div > div { background: #4F81BD !important; }
+  [data-testid="stSidebar"] input { background: rgba(255,255,255,0.1) !important; border-color: rgba(255,255,255,0.25) !important; color: #fff !important; }
+  [data-testid="stSidebar"] label { color: #b8cfe4 !important; font-size: 0.8rem !important; font-weight: 500 !important; }
+  [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.15) !important; }
+  [data-testid="stSidebar"] .stSelectbox > div { background: rgba(255,255,255,0.08) !important; }
+
+  /* ── Fondo principal ── */
+  [data-testid="stAppViewContainer"] { background-color: #f0f4f8; }
+  [data-testid="stMain"] { background-color: #f0f4f8; }
+
+  /* ── Tarjetas KPI ── */
+  .kpi-card {
+    background: white;
+    border-radius: 12px;
+    padding: 18px 14px;
+    border-top: 4px solid #4F81BD;
+    box-shadow: 0 2px 12px rgba(31,73,125,0.08);
+    text-align: center;
+    transition: box-shadow 0.2s;
+  }
+  .kpi-card:hover { box-shadow: 0 4px 20px rgba(31,73,125,0.15); }
+  .kpi-card.accent-green { border-top-color: #1a7f4e; }
+  .kpi-card.accent-red   { border-top-color: #c0392b; }
+  .kpi-card.accent-amber { border-top-color: #d4870d; }
+  .kpi-card.accent-purple{ border-top-color: #6f42c1; }
+
+  .kpi-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #6b7a8d;
+    margin-bottom: 4px;
+  }
+  .kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #0f2444;
+    line-height: 1.1;
+  }
+  .kpi-value.green  { color: #1a7f4e; }
+  .kpi-value.red    { color: #c0392b; }
+  .kpi-value.blue   { color: #1F497D; }
+  .kpi-value.amber  { color: #d4870d; }
+  .kpi-value.purple { color: #6f42c1; }
+  .kpi-sub {
+    font-size: 0.75rem;
+    color: #8a96a3;
+    margin-top: 3px;
+  }
+
+  /* ── Sección card ── */
+  .section-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px 22px;
+    box-shadow: 0 1px 8px rgba(31,73,125,0.07);
+    margin-bottom: 18px;
+  }
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #1F497D;
+    border-left: 4px solid #4F81BD;
+    padding-left: 10px;
+    margin-bottom: 14px;
+  }
+
+  /* ── Banners de estado ── */
+  .banner-ok {
+    background: linear-gradient(135deg, #e8f5ee 0%, #d4edda 100%);
+    border-left: 5px solid #1a7f4e;
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: #155724;
+    font-size: 0.88rem;
+  }
+  .banner-warn {
+    background: linear-gradient(135deg, #fffbea 0%, #fff3cd 100%);
+    border-left: 5px solid #d4870d;
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: #7a4f0a;
+    font-size: 0.88rem;
+  }
+  .banner-info {
+    background: linear-gradient(135deg, #e8f0fc 0%, #dce8fb 100%);
+    border-left: 5px solid #4F81BD;
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: #1F497D;
+    font-size: 0.88rem;
+  }
+
+  /* ── Slots de carga ── */
+  .slot-neutral { border-left-color: #4F81BD !important; }
+  .slot-diff    { border-left-color: #c0392b !important; }
+
+  /* ── Header personalizado ── */
+  .app-header {
+    background: linear-gradient(100deg, #0f2444 0%, #1F497D 60%, #2563a8 100%);
+    border-radius: 14px;
+    padding: 22px 28px;
+    margin-bottom: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(15,36,68,0.3);
+  }
+  .app-header h1 {
+    color: white !important;
+    font-size: 1.4rem !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    letter-spacing: -0.01em;
+  }
+  .app-header p { color: #b8cfe4; font-size: 0.8rem; margin: 4px 0 0 0; }
+  .badge {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #c8f7c5;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Form inputs ── */
+  .stTextInput > div > div > input,
+  .stTextArea > div > div > textarea,
+  .stNumberInput > div > div > input {
+    border-radius: 8px !important;
+    border-color: #d0dce8 !important;
+    font-size: 0.88rem !important;
+  }
+  .stTextInput > div > div > input:focus,
+  .stTextArea > div > div > textarea:focus {
+    border-color: #4F81BD !important;
+    box-shadow: 0 0 0 3px rgba(79,129,189,0.15) !important;
+  }
+
+  /* ── Botones ── */
+  .stButton > button {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+  }
+  .stDownloadButton > button {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    background: #1F497D !important;
+    color: white !important;
+    border: none !important;
+  }
+  .stDownloadButton > button:hover { background: #2563a8 !important; }
+
+  /* ── Divider ── */
+  hr { border-color: #dce8f0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# =========================================================================
-# 1. CONTROL DE ACCESO POR CONTRASEÑA
-# =========================================================================
-PASSWORD_DEFAULT = "tecnico2026"
-# Se puede sobreescribir con st.secrets si existe
-PASSWORD_SISTEMA = st.secrets.get("PASSWORD", PASSWORD_DEFAULT) if hasattr(st, "secrets") else PASSWORD_DEFAULT
 
-if "autenticado" not in st.session_state:
-    st.session_state["autenticado"] = False
+# ══════════════════════════════════════════════════════════════════
+# 1. AUTENTICACIÓN
+# ══════════════════════════════════════════════════════════════════
+PASSWORD = "tecnico2026"
+try:
+    PASSWORD = st.secrets.get("PASSWORD", PASSWORD)
+except Exception:
+    pass
 
-if not st.session_state["autenticado"]:
-    col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
-    with col_l2:
-        st.markdown("<div style='height: 60px'></div>", unsafe_allow_html=True)
-        st.markdown("### 🔒 Acceso al Medidor de RPM")
-        st.markdown("Plataforma de análisis de vibraciones y cálculo de velocidad de giro.")
-        
-        clave_ingresada = st.text_input("Ingresa la contraseña de acceso:", type="password")
-        if st.button("Ingresar a la Plataforma", use_container_width=True):
-            if clave_ingresada == PASSWORD_SISTEMA:
-                st.session_state["autenticado"] = True
+if "auth" not in st.session_state:
+    st.session_state["auth"] = False
+
+if not st.session_state["auth"]:
+    col_l, col_m, col_r = st.columns([1, 1.1, 1])
+    with col_m:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='text-align:center; margin-bottom:28px;'>
+          <div style='font-size:3rem;'>⚙️</div>
+          <h2 style='color:#0f2444; margin:8px 0 4px;'>Analizador de RPM</h2>
+          <p style='color:#6b7a8d; font-size:0.88rem;'>Plataforma técnica de análisis espectral de vibraciones</p>
+        </div>
+        """, unsafe_allow_html=True)
+        pwd = st.text_input("Contraseña de acceso:", type="password", label_visibility="collapsed",
+                            placeholder="Ingresa la contraseña...")
+        if st.button("🔑 Ingresar a la Plataforma", use_container_width=True):
+            if pwd == PASSWORD:
+                st.session_state["auth"] = True
                 st.rerun()
             else:
-                st.error("❌ Contraseña incorrecta. Por favor contacta al administrador.")
-        st.caption(f"💡 Contraseña predeterminada: `{PASSWORD_DEFAULT}` (editable en código o secrets)")
+                st.error("❌ Contraseña incorrecta.")
+        st.caption(f"🔐 Contraseña: `{PASSWORD}`  ·  Procesamiento 100% volátil — cero almacenamiento en nube")
     st.stop()
 
-# =========================================================================
-# 2. INTERFAZ PRINCIPAL (AUTENTICADA)
-# =========================================================================
-col_h1, col_h2 = st.columns([3, 1])
-with col_h1:
-    st.title("⚙️ Analizador de RPM por Vibración")
-    st.markdown("Determinación de velocidad de giro con acelerómetro, validación con carga y generación de informe técnico.")
-with col_h2:
-    st.markdown("<div style='height: 15px'></div>", unsafe_allow_html=True)
-    st.markdown("<div class='privacy-badge'>🔒 Procesamiento Volátil (Cero Almacenamiento)</div>", unsafe_allow_html=True)
-    if st.button("🚪 Cerrar Sesión"):
-        st.session_state["autenticado"] = False
+
+# ══════════════════════════════════════════════════════════════════
+# 2. HEADER GERENCIAL
+# ══════════════════════════════════════════════════════════════════
+col_hd, col_logout = st.columns([4, 1])
+with col_hd:
+    st.markdown("""
+    <div class="app-header">
+      <div>
+        <h1>⚙️ Analizador de RPM por Vibración</h1>
+        <p>Determinación de velocidad de giro · Análisis espectral FFT · Informe Técnico Oficial</p>
+      </div>
+      <div>
+        <span class="badge">🔒 CERO ALMACENAMIENTO EN NUBE</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+with col_logout:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        st.session_state["auth"] = False
         st.rerun()
 
-# Barra Lateral: Parámetros del Equipo y de Detección
+
+# ══════════════════════════════════════════════════════════════════
+# 3. BARRA LATERAL — Parámetros
+# ══════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.header("🔧 Parámetros del Equipo")
-    rpm_nominal = st.number_input(
-        "RPM Nominal de Placa",
-        min_value=1.0, max_value=100000.0, value=1750.0, step=50.0,
-        help="Velocidad esperada del motor según placa."
-    )
+    st.markdown("## 🔧 Parámetros del Equipo")
+    rpm_nominal = st.number_input("RPM Nominal de Placa", 1.0, 100000.0, 1750.0, 50.0)
     f_rot = rpm_nominal / 60.0
-    st.caption(f"Frecuencia 1X esperada: **{f_rot:.2f} Hz**")
-    
-    st.divider()
-    st.subheader("🎛️ Rango de Frecuencias y Sensor")
-    
-    # CASILLA DE RANGO DE FRECUENCIAS (Predeterminadamente en 200 Hz como pidió el usuario)
+    st.caption(f"Frecuencia 1X: **{f_rot:.2f} Hz**")
+
+    st.markdown("---")
+    st.markdown("## 🎛️ Configuración del Sensor")
     freqplot = st.number_input(
-        "Frecuencia máxima de visualización [Hz]",
-        min_value=10,
-        max_value=5000,
-        value=200,
-        step=20,
-        help="Límite superior del eje de frecuencias. Por defecto carga en 200 Hz (valor original del código)."
+        "Frecuencia máx. visualización [Hz]",
+        min_value=10, max_value=5000, value=200, step=20,
+        help="Predeterminado en 200 Hz (valor original del código)."
     )
-    
-    fs = st.number_input(
-        "Frecuencia de Muestreo (Fs) [Hz]",
-        min_value=100, max_value=200000, value=11628, step=100,
-        help="Frecuencia del acelerómetro."
-    )
-    
-    with st.expander("🛠️ Ajustes Avanzados de Picos"):
-        tolerancia_hz = st.number_input("Tolerancia armónicos (± Hz)", min_value=0.1, max_value=10.0, value=1.5, step=0.1)
-        altura_min_pct = st.slider("Sensibilidad de picos (% del máximo)", min_value=1, max_value=50, value=10, step=1) / 100.0
-        distancia_min = st.slider("Separación mínima entre picos", min_value=1, max_value=50, value=5, step=1)
-        n_armonicos = st.slider("Cantidad de armónicos (1X, 2X...)", min_value=1, max_value=5, value=3)
+    fs = st.number_input("Frecuencia de Muestreo (Fs) [Hz]", 100, 200000, 11628, 100)
 
-# Funciones de procesamiento FFT y picos
-def calcular_fft(signal_array, sampling_rate, max_freq):
-    L = len(signal_array)
-    rms = float(np.std(signal_array, ddof=1))
+    st.markdown("---")
+    with st.expander("🛠️ Ajustes de Detección"):
+        tolerancia_hz  = st.number_input("Tolerancia armónicos (± Hz)", 0.1, 10.0, 1.5, 0.1)
+        altura_min_pct = st.slider("Sensibilidad picos (% máx)", 1, 50, 10) / 100.0
+        distancia_min  = st.slider("Separación mínima entre picos", 1, 50, 5)
+        n_armonicos    = st.slider("Armónicos a marcar (1X, 2X…)", 1, 5, 3)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 4. FUNCIONES DE ANÁLISIS
+# ══════════════════════════════════════════════════════════════════
+def calcular_fft(arr, sr, fmax):
+    L = len(arr)
+    rms = float(np.std(arr, ddof=1))
     nfft = 2 ** int(np.ceil(np.log2(L)))
-    f = sampling_rate / 2 * np.linspace(0, 1, nfft // 2 + 1)
-    fft_vals = np.fft.fft(signal_array, nfft) / L
-    espectro = 2 * np.abs(fft_vals[:nfft // 2 + 1])
-    
-    mask = f <= max_freq
-    f_plot = f[mask]
-    espectro_plot = espectro[mask]
-    return f_plot, espectro_plot, rms
+    f = sr / 2 * np.linspace(0, 1, nfft // 2 + 1)
+    spec = 2 * np.abs(np.fft.fft(arr, nfft)[:nfft // 2 + 1]) / L
+    m = f <= fmax
+    return f[m], spec[m], rms
 
-def analizar_picos(f_plot, espectro_plot, f_objetivo, tol, min_pct, dist_min):
-    alt_min = float(espectro_plot.max() * min_pct)
-    p_idx, _ = find_peaks(espectro_plot, height=alt_min, distance=dist_min)
-    p_freq = f_plot[p_idx]
-    p_amp = espectro_plot[p_idx]
-    
-    df_p = pd.DataFrame({'Frecuencia [Hz]': p_freq, 'Amplitud': p_amp})
+
+def analizar_picos(f_plot, esp, f_obj, tol, min_pct, dist_min):
+    alt = float(esp.max() * min_pct)
+    idx, _ = find_peaks(esp, height=alt, distance=dist_min)
+    pf, pa = f_plot[idx], esp[idx]
+    df_p = pd.DataFrame({'Frecuencia [Hz]': pf, 'Amplitud': pa})
     df_p = df_p.sort_values('Amplitud', ascending=False).reset_index(drop=True)
-    
-    cercanos = df_p[np.abs(df_p['Frecuencia [Hz]'] - f_objetivo) <= tol]
-    if not cercanos.empty:
-        best = cercanos.iloc[0]
-        return best['Frecuencia [Hz]'], best['Amplitud'], df_p, p_freq, p_amp
-    return None, None, df_p, p_freq, p_amp
+    near = df_p[np.abs(df_p['Frecuencia [Hz]'] - f_obj) <= tol]
+    if not near.empty:
+        b = near.iloc[0]
+        return b['Frecuencia [Hz]'], b['Amplitud'], pf, pa
+    return None, None, pf, pa
 
-# =========================================================================
-# 3. SLOTS DE CARGA FLEXIBLES (NO RESTRICTIVOS: HASTA 4 ARCHIVOS)
-# =========================================================================
-st.subheader("📁 Carga de Archivos de Medición (Flexible - No Restrictivo)")
-st.caption("Carga los archivos disponibles. Puedes cargar solo 1 en vacío y 1 con carga, o los que tengas a disposición.")
-
-c_slot1, c_slot2, c_slot3, c_slot4 = st.columns(4)
-
-with c_slot1:
-    f1 = st.file_uploader("1️⃣ Vacío - Ensayo 1 (Base)", type=["csv", "txt"], key="file1")
-with c_slot2:
-    f2 = st.file_uploader("2️⃣ Vacío - Ensayo 2 (Opcional)", type=["csv", "txt"], key="file2")
-with c_slot3:
-    f3 = st.file_uploader("3️⃣ Vacío - Ensayo 3 (Opcional)", type=["csv", "txt"], key="file3")
-with c_slot4:
-    f4 = st.file_uploader("🚨 Con Carga / Frenado (Opcional)", type=["csv", "txt"], key="file4")
-
-col_d1, col_d2 = st.columns([3, 1])
-with col_d2:
-    usar_demo = st.button("🧪 Cargar Medición Demo", help="Simula los 3 ensayos en vacío (~1748 RPM) y 1 con carga (~1620 RPM)")
-
-# Lectura y preparación de datos
-archivos_cargados = []
 
 def parsear_csv(archivo):
     try:
-        df_t = pd.read_csv(archivo, sep=None, engine='python', decimal='.')
-        col = df_t.columns[0]
-        arr = pd.to_numeric(df_t[col], errors='coerce').dropna().to_numpy(dtype=float)
-        if len(arr) >= 10:
-            return arr
+        df = pd.read_csv(archivo, sep=None, engine='python', decimal='.')
+        col = df.columns[0]
+        arr = pd.to_numeric(df[col], errors='coerce').dropna().to_numpy(dtype=float)
+        return arr if len(arr) >= 10 else None
     except Exception:
-        pass
-    return None
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 5. SLOTS DE CARGA (FLEXIBLE, NO RESTRICTIVO)
+# ══════════════════════════════════════════════════════════════════
+st.markdown("""
+<div class="section-card">
+  <div class="section-title">📁 Carga de Archivos de Medición</div>
+</div>
+""", unsafe_allow_html=True)
+
+with st.container():
+    col_desc, col_demo = st.columns([3, 1])
+    with col_desc:
+        st.caption("Carga de 1 a 4 mediciones. Ningún slot es obligatorio — la plataforma se adapta a los archivos disponibles.")
+    with col_demo:
+        usar_demo = st.button("🧪 Demo (4 mediciones simuladas)", use_container_width=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        f1 = st.file_uploader("Medición 1", type=["csv","txt"], key="f1",
+                               label_visibility="visible")
+    with c2:
+        f2 = st.file_uploader("Medición 2 *(Opcional)*", type=["csv","txt"], key="f2",
+                               label_visibility="visible")
+    with c3:
+        f3 = st.file_uploader("Medición 3 *(Opcional)*", type=["csv","txt"], key="f3",
+                               label_visibility="visible")
+    with c4:
+        f4 = st.file_uploader("Medición 4 — Condición Diferente *(Opcional)*",
+                               type=["csv","txt"], key="f4", label_visibility="visible")
+
+archivos_cargados = []
 
 if usar_demo:
-    L_demo = int(fs * 1.5)
-    t_demo = np.arange(L_demo) / fs
-    f_reales = [29.14, 29.16, 29.13]
-    for i, fr in enumerate(f_reales):
-        s = (0.45 * np.sin(2 * np.pi * fr * t_demo) +
-             0.18 * np.sin(2 * np.pi * 2 * fr * t_demo) +
-             0.08 * np.sin(2 * np.pi * 3 * fr * t_demo) +
-             np.random.normal(0, 0.04, L_demo))
-        archivos_cargados.append({
-            'tipo': 'vacio',
-            'slot': i + 1,
-            'nombre': f'Demo_Vacio_Ensayo_{i+1}.csv',
-            'data': s
-        })
-    # Con carga
-    f_c = 27.0
-    s_c = (0.38 * np.sin(2 * np.pi * f_c * t_demo) +
-           0.22 * np.sin(2 * np.pi * 2 * f_c * t_demo) +
-           np.random.normal(0, 0.05, L_demo))
-    archivos_cargados.append({
-        'tipo': 'carga',
-        'slot': 4,
-        'nombre': 'Demo_Con_Carga_Agua.csv',
-        'data': s_c
-    })
-    st.info("💡 Modo Demostración activado con 4 ensayos simulados.")
+    L = int(fs * 1.5); t = np.arange(L) / fs
+    for i, fr in enumerate([29.14, 29.16, 29.13]):
+        s = (0.45*np.sin(2*np.pi*fr*t) + 0.18*np.sin(2*np.pi*2*fr*t) +
+             0.08*np.sin(2*np.pi*3*fr*t) + np.random.normal(0, 0.04, L))
+        archivos_cargados.append({'slot': i+1, 'nombre': f'Demo_Medicion_{i+1}.csv',
+                                   'tipo': 'base', 'data': s})
+    fc = 27.0
+    sc = (0.38*np.sin(2*np.pi*fc*t) + 0.22*np.sin(2*np.pi*2*fc*t) +
+          np.random.normal(0, 0.05, L))
+    archivos_cargados.append({'slot': 4, 'nombre': 'Demo_Medicion_4_diferente.csv',
+                               'tipo': 'diferente', 'data': sc})
+    st.info("💡 Modo Demo activado: mediciones 1–3 a ~1748 RPM · Medición 4 a ~1620 RPM")
 else:
-    if f1:
-        d1 = parsear_csv(f1)
-        if d1 is not None: archivos_cargados.append({'tipo': 'vacio', 'slot': 1, 'nombre': f1.name, 'data': d1})
-    if f2:
-        d2 = parsear_csv(f2)
-        if d2 is not None: archivos_cargados.append({'tipo': 'vacio', 'slot': 2, 'nombre': f2.name, 'data': d2})
-    if f3:
-        d3 = parsear_csv(f3)
-        if d3 is not None: archivos_cargados.append({'tipo': 'vacio', 'slot': 3, 'nombre': f3.name, 'data': d3})
-    if f4:
-        d4 = parsear_csv(f4)
-        if d4 is not None: archivos_cargados.append({'tipo': 'carga', 'slot': 4, 'nombre': f4.name, 'data': d4})
+    for i, fobj in enumerate([f1, f2, f3, f4]):
+        if fobj:
+            arr = parsear_csv(fobj)
+            if arr is not None:
+                # La 4ta es "diferente condición" solo si ya hay 3 base
+                base_count = sum(1 for a in archivos_cargados if a['tipo'] == 'base')
+                tipo = 'diferente' if (i == 3 and base_count >= 1) else 'base'
+                archivos_cargados.append({'slot': i+1, 'nombre': fobj.name,
+                                           'tipo': tipo, 'data': arr})
 
-# =========================================================================
-# 4. PROCESAMIENTO Y RESULTADOS
-# =========================================================================
+
+# ══════════════════════════════════════════════════════════════════
+# 6. PROCESAMIENTO Y RESULTADOS
+# ══════════════════════════════════════════════════════════════════
+COLORES_BASE = ['#1F497D', '#2980b9', '#1a7f4e', '#6f42c1']
+COLOR_DIFF   = '#c0392b'
+
 if archivos_cargados:
-    ensayos_base_res = []
-    ensayo_carga_res = None
-    imagenes_para_pdf = []
-    
-    colores = {'vacio': ['#1f77b4', '#00a8cc', '#2ca02c'], 'carga': '#d62728'}
-    vacio_count = 0
-    
+    ensayos_base = []
+    ensayo_dif   = None
+    imagenes_pdf = []
+
     for item in archivos_cargados:
-        f_plot, esp_plot, rms_val = calcular_fft(item['data'], fs, freqplot)
-        f_1x, amp_1x, df_p, p_freq, p_amp = analizar_picos(f_plot, esp_plot, f_rot, tolerancia_hz, altura_min_pct, distancia_min)
-        rpm_val = (f_1x * 60.0) if f_1x is not None else None
-        
-        if item['tipo'] == 'vacio':
-            col = colores['vacio'][vacio_count % len(colores['vacio'])]
-            vacio_count += 1
-            res_obj = {
-                'slot': item['slot'],
-                'nombre': item['nombre'],
-                'tipo': 'vacio',
-                'color': col,
-                'f_plot': f_plot,
-                'espectro_plot': esp_plot,
-                'rms': rms_val,
-                'f_1x': f_1x,
-                'amp_1x': amp_1x,
-                'rpm': rpm_val,
-                'p_freq': p_freq,
-                'p_amp': p_amp
-            }
-            ensayos_base_res.append(res_obj)
-            
-            # Generar imagen para el informe
-            if REPORTLAB_DISPONIBLE:
-                img_buf = generar_imagen_fft(f_plot, esp_plot, f_1x, amp_1x, f_rot, n_armonicos, f"Slot {item['slot']} (Vacío): {item['nombre']}", col)
-                imagenes_para_pdf.append((f"Slot {item['slot']} (Vacío) - {rpm_val:.1f} RPM" if rpm_val else f"Slot {item['slot']}", img_buf))
+        f_plot, esp, rms = calcular_fft(item['data'], fs, freqplot)
+        f_1x, amp_1x, pf, pa = analizar_picos(f_plot, esp, f_rot,
+                                               tolerancia_hz, altura_min_pct, distancia_min)
+        rpm = f_1x * 60.0 if f_1x else None
+
+        obj = {**item, 'f_plot': f_plot, 'espectro_plot': esp, 'rms': rms,
+               'f_1x': f_1x, 'amp_1x': amp_1x, 'rpm': rpm,
+               'p_freq': pf, 'p_amp': pa,
+               'color': (COLOR_DIFF if item['tipo'] == 'diferente'
+                         else COLORES_BASE[len(ensayos_base) % len(COLORES_BASE)])}
+
+        if item['tipo'] == 'base':
+            ensayos_base.append(obj)
         else:
-            # Ensayo con carga
-            # Buscar el nuevo pico de rotación más lento
-            nuevo_f_carga = None
-            nuevo_rpm_carga = None
-            nueva_amp_carga = None
-            
-            # Si hay al menos un ensayo en vacío, comparamos contra f_rot o f_1x
-            f_ref = f_rot
-            if ensayos_base_res and ensayos_base_res[0]['f_1x']:
-                f_ref = ensayos_base_res[0]['f_1x']
-                
-            picos_sub = [(f, a) for f, a in zip(p_freq, p_amp) if (f_ref * 0.4) <= f <= (f_ref * 0.98)]
-            if picos_sub:
-                picos_sub_sorted = sorted(picos_sub, key=lambda x: x[1], reverse=True)
-                nuevo_f_carga = picos_sub_sorted[0][0]
-                nueva_amp_carga = picos_sub_sorted[0][1]
-                nuevo_rpm_carga = nuevo_f_carga * 60.0
-                
-            ensayo_carga_res = {
-                'slot': 4,
-                'nombre': item['nombre'],
-                'tipo': 'carga',
-                'color': colores['carga'],
-                'f_plot': f_plot,
-                'espectro_plot': esp_plot,
-                'rms': rms_val,
-                'f_carga': nuevo_f_carga,
-                'amp_carga': nueva_amp_carga,
-                'rpm_carga': nuevo_rpm_carga,
-                'p_freq': p_freq,
-                'p_amp': p_amp
-            }
-            if REPORTLAB_DISPONIBLE:
-                img_buf_c = generar_imagen_fft(f_plot, esp_plot, nuevo_f_carga, nueva_amp_carga, f_rot, n_armonicos, f"Slot 4 (Con Carga): {item['nombre']}", '#d62728')
-                imagenes_para_pdf.append((f"Slot 4 (Con Carga) - {nuevo_rpm_carga:.1f} RPM" if nuevo_rpm_carga else "Slot 4 (Con Carga)", img_buf_c))
+            ensayo_dif = obj
 
-    # Promedios y estadísticas de vacío
-    rpms_validas = [r['rpm'] for r in ensayos_base_res if r['rpm'] is not None]
-    rpm_promedio = np.mean(rpms_validas) if rpms_validas else None
-    rpm_std = np.std(rpms_validas, ddof=1) if len(rpms_validas) > 1 else 0.0
-    f_1x_promedio = (rpm_promedio / 60.0) if rpm_promedio else None
-    rms_promedio = np.mean([r['rms'] for r in ensayos_base_res]) if ensayos_base_res else (ensayo_carga_res['rms'] if ensayo_carga_res else 0.0)
+        if REPORTLAB_OK:
+            lbl = f"Medición {item['slot']} ({'Diferente' if item['tipo']=='diferente' else 'Base'})"
+            img_buf = generar_imagen_fft(f_plot, esp, f_1x, amp_1x, f_rot,
+                                         n_armonicos, lbl, obj['color'])
+            imagenes_pdf.append((lbl, img_buf))
 
-    # Tarjetas KPI
-    st.markdown("### 📊 Indicadores Clave de Medición")
+    # Superposición
+    if REPORTLAB_OK and len(archivos_cargados) >= 2:
+        sup_buf = generar_imagen_superposicion(
+            [*ensayos_base, *([ensayo_dif] if ensayo_dif else [])], f_rot, n_armonicos)
+        imagenes_pdf.append(('Superposición de Todos los Espectros', sup_buf))
+
+    # ── Estadísticas globales ──
+    rpms_v   = [r['rpm'] for r in ensayos_base if r['rpm']]
+    rpm_prom = np.mean(rpms_v) if rpms_v else None
+    rpm_std  = float(np.std(rpms_v, ddof=1)) if len(rpms_v) > 1 else 0.0
+    f1x_prom = rpm_prom / 60.0 if rpm_prom else None
+    rms_prom = float(np.mean([r['rms'] for r in ensayos_base])) if ensayos_base else 0.0
+
+    # ── TARJETAS KPI GERENCIALES ──────────────────────────────────
+    st.markdown("### Indicadores Clave")
     k1, k2, k3, k4 = st.columns(4)
+
     with k1:
-        if rpm_promedio is not None:
+        if rpm_prom:
             st.markdown(f"""
-            <div class="metric-card" style="border-left-color: #28a745;">
-                <div class="metric-title">🎯 RPM PROMEDIO REAL</div>
-                <div class="metric-value" style="color: #28a745;">{rpm_promedio:.1f}</div>
-                <div class="metric-sub">Frecuencia: {f_1x_promedio:.2f} Hz</div>
-            </div>
-            """, unsafe_allow_html=True)
-        elif ensayo_carga_res and ensayo_carga_res['rpm_carga']:
-            st.markdown(f"""
-            <div class="metric-card" style="border-left-color: #ff7f0e;">
-                <div class="metric-title">🎯 RPM CON CARGA</div>
-                <div class="metric-value" style="color: #ff7f0e;">{ensayo_carga_res['rpm_carga']:.1f}</div>
-                <div class="metric-sub">Sin ensayos en vacío</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="kpi-card accent-green">
+              <div class="kpi-label">🎯 RPM Promedio Real</div>
+              <div class="kpi-value green">{rpm_prom:.1f}</div>
+              <div class="kpi-sub">Frec. fundamental: {f1x_prom:.2f} Hz</div>
+            </div>""", unsafe_allow_html=True)
         else:
             st.markdown("""
-            <div class="metric-card" style="border-left-color: #dc3545;">
-                <div class="metric-title">🎯 RPM PROMEDIO</div>
-                <div class="metric-value" style="color: #dc3545;">No detectada</div>
-                <div class="metric-sub">Ajusta la tolerancia</div>
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="kpi-card accent-red">
+              <div class="kpi-label">🎯 RPM Promedio</div>
+              <div class="kpi-value red">— —</div>
+              <div class="kpi-sub">Sin pico detectado en rango</div>
+            </div>""", unsafe_allow_html=True)
 
     with k2:
-        delta_str = f"{((rpm_promedio - rpm_nominal) / rpm_nominal * 100.0):+.2f}%" if rpm_promedio else "--"
-        disp_str = f"± {rpm_std:.2f} RPM" if len(rpms_validas) > 1 else ("1 ensayo" if len(rpms_validas) == 1 else "--")
+        delta = f"{((rpm_prom-rpm_nominal)/rpm_nominal*100):+.2f}%" if rpm_prom else "—"
+        disp  = f"± {rpm_std:.2f} RPM" if len(rpms_v) > 1 else ("1 medición" if rpms_v else "—")
         st.markdown(f"""
-        <div class="metric-card" style="border-left-color: #007bff;">
-            <div class="metric-title">📋 Repetibilidad / Desviación</div>
-            <div class="metric-value" style="color: #007bff;">{disp_str}</div>
-            <div class="metric-sub">Desviación nominal: {delta_str}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        <div class="kpi-card">
+          <div class="kpi-label">📋 Repetibilidad</div>
+          <div class="kpi-value blue">{disp}</div>
+          <div class="kpi-sub">Desviación respecto a placa: {delta}</div>
+        </div>""", unsafe_allow_html=True)
 
     with k3:
         st.markdown(f"""
-        <div class="metric-card" style="border-left-color: #17a2b8;">
-            <div class="metric-title">⚡ Vibración Global RMS</div>
-            <div class="metric-value" style="color: #17a2b8;">{rms_promedio:.4f}</div>
-            <div class="metric-sub">m/s²</div>
-        </div>
-        """, unsafe_allow_html=True)
+        <div class="kpi-card accent-amber">
+          <div class="kpi-label">⚡ Vibración Global RMS</div>
+          <div class="kpi-value amber">{rms_prom:.4f}</div>
+          <div class="kpi-sub">m/s² — promedio de mediciones base</div>
+        </div>""", unsafe_allow_html=True)
 
     with k4:
-        total_cargados = len(archivos_cargados)
+        n_tot = len(archivos_cargados)
+        n_ok  = len([r for r in ensayos_base if r['rpm']])
+        col_coh = "green" if n_ok == len(ensayos_base) and ensayos_base else "amber"
         st.markdown(f"""
-        <div class="metric-card" style="border-left-color: #6f42c1;">
-            <div class="metric-title">📁 Ensayos Analizados</div>
-            <div class="metric-value" style="color: #6f42c1;">{total_cargados} / 4</div>
-            <div class="metric-sub">{len(ensayos_base_res)} vacío | {1 if ensayo_carga_res else 0} con carga</div>
-        </div>
-        """, unsafe_allow_html=True)
+        <div class="kpi-card accent-purple">
+          <div class="kpi-label">🔍 Coherencia</div>
+          <div class="kpi-value purple">{n_ok}/{len(ensayos_base)}</div>
+          <div class="kpi-sub">{n_tot} archivo(s) cargado(s) · {1 if ensayo_dif else 0} cond. diferente</div>
+        </div>""", unsafe_allow_html=True)
 
     st.write("")
 
-    # Diagnóstico de Validación con Carga
-    if ensayo_carga_res and ensayo_carga_res['rpm_carga'] and rpm_promedio:
-        caida = rpm_promedio - ensayo_carga_res['rpm_carga']
-        caida_pct = (caida / rpm_promedio) * 100.0
-        if caida > 0:
+    # ── Banner de diagnóstico ──────────────────────────────────────
+    if ensayo_dif and ensayo_dif.get('rpm') and rpm_prom:
+        delta_rpm = rpm_prom - ensayo_dif['rpm']
+        pct = abs(delta_rpm / rpm_prom) * 100.0
+        if delta_rpm > 0:
             st.markdown(f"""
-            <div class="status-ok">
-                🎯 <strong>¡VALIDACIÓN DE ROTACIÓN EXITOSA Y CONFIRMADA!</strong><br>
-                Al aplicar carga, la velocidad de rotación cayó de <strong>{rpm_promedio:.1f} RPM ({f_1x_promedio:.2f} Hz)</strong> 
-                a <strong>{ensayo_carga_res['rpm_carga']:.1f} RPM ({ensayo_carga_res['f_carga']:.2f} Hz)</strong> 
-                (reducción de <strong>{caida:.1f} RPM / {caida_pct:.1f}%</strong>).<br>
-                ✅ Esto <strong>certifica que el punto medido es la velocidad real del eje</strong> y descarta frecuencias fijas de red (60 Hz) o resonancias mecánicas.
-            </div>
-            """, unsafe_allow_html=True)
+            <div class="banner-ok">
+              🎯 <strong>DIAGNÓSTICO — DIFERENCIA CONFIRMADA:</strong><br>
+              Las mediciones base registraron <strong>{rpm_prom:.1f} RPM</strong>.
+              La Medición 4 (condición diferente) registró <strong>{ensayo_dif['rpm']:.1f} RPM</strong>,
+              una reducción de <strong>{delta_rpm:.1f} RPM ({pct:.1f}%)</strong>.<br>
+              ✅ Esto confirma que el pico identificado corresponde a la rotación mecánica real del eje.
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div class="banner-warn">
+              ⚠️ <strong>Medición 4:</strong> Registró <strong>{ensayo_dif['rpm']:.1f} RPM</strong>
+              ({abs(delta_rpm):.1f} RPM de diferencia respecto a la base).
+            </div>""", unsafe_allow_html=True)
+    elif rpm_prom:
+        st.markdown(f"""
+        <div class="banner-info">
+          ✅ <strong>Mediciones base procesadas:</strong> {rpm_prom:.1f} RPM promedio.
+          Carga una Medición 4 con condición diferente para validar el pico.
+        </div>""", unsafe_allow_html=True)
 
     st.write("")
 
-    # =========================================================================
-    # 5. LOS 4 GRÁFICOS DE TRANSFORMADAS FFT INDIVIDUALES
-    # =========================================================================
-    st.subheader("📈 Gráficos de las Transformadas de Fourier (FFT) Individuales")
-    st.caption(f"Mostrando el espectro de 0 a **{freqplot} Hz** para cada archivo cargado:")
+    # ══════════════════════════════════════════════════════════════
+    # 7. 5 GRÁFICOS APILADOS VERTICALMENTE (4 individuales + 1 superposición)
+    # ══════════════════════════════════════════════════════════════
+    st.markdown("""
+    <div class="section-title">📈 Espectros de Frecuencia (FFT) — Individuales y Comparativo</div>
+    """, unsafe_allow_html=True)
+    st.caption(f"Rango mostrado: **0 – {freqplot} Hz** · Frecuencia de referencia 1X: **{f_rot:.2f} Hz** "
+               f"({rpm_nominal:.0f} RPM nominal)")
 
-    todos_los_ensayos = ensayos_base_res.copy()
-    if ensayo_carga_res:
-        todos_los_ensayos.append(ensayo_carga_res)
+    todos_ensayos = [*ensayos_base, *([ensayo_dif] if ensayo_dif else [])]
 
-    # Cuadrícula 2x2 para los 4 gráficos
-    grid_cols = st.columns(2)
-    for idx, e in enumerate(todos_los_ensayos):
-        col_idx = idx % 2
-        with grid_cols[col_idx]:
-            fig_ind = go.Figure()
-            
-            # Traza espectro
-            nombre_label = f"Slot {e['slot']}: {e['nombre']}"
-            fig_ind.add_trace(go.Scatter(
-                x=e['f_plot'], y=e['espectro_plot'], mode='lines',
-                line=dict(color=e['color'], width=1.5),
-                name='Espectro FFT',
-                hovertemplate='Frec: %{x:.2f} Hz<br>Amp: %{y:.4f}<extra></extra>'
+    for e in todos_ensayos:
+        es_dif   = e['tipo'] == 'diferente'
+        etiqueta = f"Medición {e['slot']} — {'Condición Diferente' if es_dif else 'Condición Base'}"
+        rpm_lbl  = f"{e['rpm']:.1f} RPM" if e['rpm'] else "Sin pico detectado"
+
+        fig = go.Figure()
+
+        # Espectro
+        fig.add_trace(go.Scatter(
+            x=e['f_plot'], y=e['espectro_plot'], mode='lines',
+            name='Espectro FFT',
+            line=dict(color=e['color'], width=1.8),
+            hovertemplate='<b>%{x:.2f} Hz</b><br>Amplitud: %{y:.5f} m/s²<extra></extra>'
+        ))
+
+        # Pico fundamental
+        if e['f_1x']:
+            fig.add_trace(go.Scatter(
+                x=[e['f_1x']], y=[e['amp_1x']], mode='markers+text',
+                marker=dict(color='#c0392b', size=10, symbol='x', line=dict(width=2)),
+                text=[f"<b>{e['f_1x']:.2f} Hz<br>{e['rpm']:.0f} RPM</b>"],
+                textposition='top center',
+                textfont=dict(size=10, color='#c0392b'),
+                name='1X detectado', showlegend=True
             ))
-            
-            # Marcador de pico fundamental
-            if e['tipo'] == 'vacio' and e['f_1x']:
-                fig_ind.add_trace(go.Scatter(
-                    x=[e['f_1x']], y=[e['amp_1x']], mode='markers+text',
-                    marker=dict(color='red', size=8, symbol='x'),
-                    text=[f"1X: {e['f_1x']:.1f} Hz\n({e['rpm']:.0f} RPM)"],
-                    textposition='top center',
-                    textfont=dict(size=10, color='darkred'),
-                    name='Pico 1X'
-                ))
-            elif e['tipo'] == 'carga' and e['f_carga']:
-                fig_ind.add_trace(go.Scatter(
-                    x=[e['f_carga']], y=[e['amp_carga']], mode='markers+text',
-                    marker=dict(color='darkred', size=9, symbol='triangle-down'),
-                    text=[f"Carga: {e['f_carga']:.1f} Hz\n({e['rpm_carga']:.0f} RPM)"],
-                    textposition='bottom center',
-                    textfont=dict(size=10, color='darkred'),
-                    name='Pico con Carga'
-                ))
-                
-            # Líneas guía de armónicos
-            for n in range(1, n_armonicos + 1):
-                f_arm = f_rot * n
-                if f_arm <= freqplot:
-                    fig_ind.add_vline(
-                        x=f_arm, line_dash="dot", line_color="#888888",
-                        annotation_text=f"{n}X ({f_arm:.1f} Hz)",
-                        annotation_position="top left",
-                        annotation_font=dict(color="#666666", size=9)
-                    )
-            
-            titulo_grafico = f"<b>Slot {e['slot']}</b> ({'Vacío' if e['tipo']=='vacio' else 'Con Carga'}) | "
-            if e['tipo'] == 'vacio' and e['rpm']:
-                titulo_grafico += f"<span style='color:{e['color']};'>{e['rpm']:.1f} RPM</span> | RMS: {e['rms']:.3f}"
-            elif e['tipo'] == 'carga' and e['rpm_carga']:
-                titulo_grafico += f"<span style='color:red;'>{e['rpm_carga']:.1f} RPM</span> | RMS: {e['rms']:.3f}"
-            else:
-                titulo_grafico += f"RMS: {e['rms']:.3f}"
 
-            fig_ind.update_layout(
-                title=dict(text=titulo_grafico, font=dict(size=12)),
-                xaxis=dict(title='Frecuencia [Hz]', range=[0, freqplot]),
-                yaxis=dict(title='Amplitud [m/s²]'),
-                margin=dict(l=35, r=15, t=35, b=35),
-                height=320,
-                template='plotly_white',
-                showlegend=False
-            )
-            st.plotly_chart(fig_ind, use_container_width=True)
+        # Líneas armónicas
+        for n in range(1, n_armonicos + 1):
+            fa = f_rot * n
+            if fa <= freqplot:
+                fig.add_vline(x=fa, line_dash='dot', line_color='#888',
+                              line_width=1,
+                              annotation_text=f'{n}X·{fa:.1f}Hz',
+                              annotation_position='top left',
+                              annotation_font=dict(size=9, color='#777'))
 
-    # Gráfica superpuesta comparativa
-    with st.expander("📈 Ver Gráfico Comparativo Superpuesto"):
+        fig.update_layout(
+            title=dict(text=f"<b>{etiqueta}</b>  ·  {rpm_lbl}  ·  RMS {e['rms']:.4f} m/s²",
+                       font=dict(size=13, color='#0f2444'), x=0),
+            xaxis=dict(title='Frecuencia [Hz]', range=[0, freqplot],
+                       gridcolor='#e8edf3', linecolor='#c5d0dc'),
+            yaxis=dict(title='Amplitud [m/s²]',
+                       gridcolor='#e8edf3', linecolor='#c5d0dc'),
+            paper_bgcolor='white', plot_bgcolor='white',
+            margin=dict(l=50, r=20, t=50, b=45),
+            height=340,
+            hovermode='x unified',
+            legend=dict(orientation='h', x=1, xanchor='right', y=1.12),
+            shapes=[dict(type='rect', xref='paper', yref='paper',
+                         x0=0, y0=0, x1=1, y1=1,
+                         line=dict(color='#dce8f0', width=1))]
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ── Gráfico 5: Superposición ───────────────────────────────────
+    if len(todos_ensayos) >= 2:
+        st.markdown("---")
         fig_sup = go.Figure()
-        for e in todos_los_ensayos:
+
+        for e in todos_ensayos:
+            rpm_lb = f"{e['rpm']:.1f} RPM" if e['rpm'] else "sin pico"
+            lbl = f"Medición {e['slot']} ({'Dif.' if e['tipo']=='diferente' else 'Base'}) · {rpm_lb}"
             fig_sup.add_trace(go.Scatter(
-                x=e['f_plot'], y=e['espectro_plot'], mode='lines',
-                line=dict(color=e['color'], width=1.5, dash='dash' if e['tipo']=='carga' else 'solid'),
-                name=f"Slot {e['slot']} ({'Carga' if e['tipo']=='carga' else 'Vacío'}): {e.get('rpm', e.get('rpm_carga', 0.0)):.1f} RPM",
-                hovertemplate=f"<b>{e['nombre']}</b><br>Frec: %{{x:.2f}} Hz<br>Amp: %{{y:.4f}}<extra></extra>"
+                x=e['f_plot'], y=e['espectro_plot'], mode='lines', name=lbl,
+                line=dict(color=e['color'], width=1.6,
+                           dash='dash' if e['tipo']=='diferente' else 'solid'),
+                hovertemplate=f"<b>Medición {e['slot']}</b><br>%{{x:.2f}} Hz · %{{y:.5f}}<extra></extra>"
             ))
+
+        for n in range(1, n_armonicos + 1):
+            fa = f_rot * n
+            if fa <= freqplot:
+                fig_sup.add_vline(x=fa, line_dash='dot', line_color='#aaa', line_width=1,
+                                  annotation_text=f'{n}X', annotation_font=dict(size=9, color='#888'))
+
         fig_sup.update_layout(
-            xaxis=dict(title='Frecuencia [Hz]', range=[0, freqplot]),
-            yaxis=dict(title='Amplitud [m/s²]'),
-            margin=dict(l=40, r=20, t=30, b=40),
-            height=450,
-            template='plotly_white',
-            hovermode='closest'
+            title=dict(text='<b>Gráfico Comparativo — Superposición de Todos los Espectros</b>',
+                       font=dict(size=13, color='#0f2444'), x=0),
+            xaxis=dict(title='Frecuencia [Hz]', range=[0, freqplot],
+                       gridcolor='#e8edf3', linecolor='#c5d0dc'),
+            yaxis=dict(title='Amplitud [m/s²]',
+                       gridcolor='#e8edf3', linecolor='#c5d0dc'),
+            paper_bgcolor='white', plot_bgcolor='white',
+            margin=dict(l=50, r=20, t=50, b=45),
+            height=400,
+            hovermode='x unified',
+            legend=dict(orientation='h', y=-0.22, x=0)
         )
         st.plotly_chart(fig_sup, use_container_width=True)
 
-    # =========================================================================
-    # 6. GENERADOR DE INFORME TÉCNICO EN PDF Y LATEX
-    # =========================================================================
-    st.divider()
-    st.subheader("📄 Generación de Informe Técnico Oficial (Formato_IT)")
-    st.caption("Completa los datos del proyecto para emitir el informe formal en PDF o exportar el código fuente LaTeX:")
+    # ══════════════════════════════════════════════════════════════
+    # 8. FORMULARIO DE INFORME TÉCNICO
+    # ══════════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.markdown("""
+    <div class="section-title">📄 Generación del Informe Técnico Oficial (Formato IT)</div>
+    """, unsafe_allow_html=True)
+    st.caption("Completa los campos para generar el informe institucional fiel al Formato_IT_NUEVO.docx")
 
-    with st.form("form_informe"):
-        st.markdown("##### 📝 Metadatos de la Iniciativa (Formato Institucional)")
-        c_inf1, c_inf2 = st.columns(2)
-        with c_inf1:
-            inf_proyecto = st.text_input("Proyecto / Iniciativa", value="Evaluación Operacional de RPM por Vibraciones")
-            inf_categoria = st.text_input("Categoría de Producto", value="Refrigeración / Electrodomésticos")
-            inf_tipo = st.text_input("Tipo de Proyecto", value="Portafolio")
-            inf_centro_costo = st.text_input("Centro de Costo", value="Mantenimiento y Confiabilidad")
-        with c_inf2:
-            inf_referencia = st.text_input("Referencia / Modelo del Equipo", value="REF-EXP-01")
-            inf_estado = st.selectbox("Estado del Ensayo", ["Completado", "En curso", "Aprobado"], index=0)
-            inf_avance = st.text_input("Avance (%)", value="100%")
-            inf_fecha = st.date_input("Fecha del Ensayo", value=datetime.date.today()).strftime("%d/%m/%Y")
+    with st.form("informe_form"):
+        tab_meta, tab_cont, tab_resp = st.tabs(["📋 Metadatos", "📝 Contenido Técnico", "✍️ Responsables"])
 
-        st.markdown("##### 🎯 Objetivos y Observaciones del Ensayo")
-        inf_objetivo = st.text_area("Objetivo del Ensayo", value="Determinar con exactitud la velocidad angular de régimen (RPM) mediante análisis FFT de vibraciones y validar la ausencia de interferencias electromagnéticas mediante prueba bajo carga.", height=70)
-        
-        c_obs1, c_obs2 = st.columns(2)
-        with c_obs1:
-            inf_conclusiones = st.text_area("Conclusiones Técnicas", value=f"La velocidad de rotación en régimen vacío se determinó en {rpm_promedio:.1f} RPM." if rpm_promedio else "Medición ejecutada.", height=90)
-        with c_obs2:
-            inf_observaciones = st.text_area("Observaciones y Recomendaciones", value="El comportamiento vibratorio global RMS se mantiene dentro de los límites estables de operación.", height=90)
+        with tab_meta:
+            ci1, ci2 = st.columns(2)
+            with ci1:
+                i_proyecto    = st.text_input("Proyecto / Iniciativa", "Evaluación de RPM por Vibraciones")
+                i_modulo      = st.text_input("Módulo", "Producto portafolio")
+                i_categoria   = st.text_input("Categoría de Producto", "Refrigeración")
+                i_tipo        = st.text_input("Tipo de Proyecto", "Portafolio")
+            with ci2:
+                i_referencia  = st.text_input("Referencia del Equipo", "N/A")
+                i_costo       = st.text_input("Centro de Costo", "")
+                i_estado      = st.selectbox("Estado", ["En curso","Completado","Aprobado"])
+                i_avance      = st.text_input("Avance (%)", "100%")
+            i_fecha = st.date_input("Fecha del Ensayo", datetime.date.today()).strftime("%d/%m/%Y")
+            i_palabras = st.text_input("Palabras Clave", "Vibración, RPM, FFT, Acelerómetro")
 
-        st.markdown("##### ✍️ Responsables de la Medición")
-        c_resp1, c_resp2, c_resp3 = st.columns(3)
-        with c_resp1:
-            inf_realizo = st.text_input("Realizó (Técnico)", value="Técnico de Ensayos")
-        with c_resp2:
-            inf_reviso = st.text_input("Revisó (Ingeniero)", value="Ing. Especialista Vibraciones")
-        with c_resp3:
-            inf_aprobo = st.text_input("Aprobó (Líder Técnico)", value="Director de Laboratorio / Calidad")
+        with tab_cont:
+            i_objetivo    = st.text_area("Objetivo del Ensayo",
+                "Determinar con exactitud la velocidad angular de régimen (RPM) "
+                "mediante análisis FFT de señales de vibración.", height=60)
+            i_aspectos    = st.text_area("Aspectos Preliminares",
+                "Se realizó la caracterización dinámica del equipo bajo análisis "
+                "conectando un acelerómetro uniaxial al artefacto en condición operativa.", height=70)
+            ci3, ci4 = st.columns(2)
+            with ci3:
+                i_conclusiones = st.text_area("Conclusiones",
+                    f"La velocidad de rotación en condición base se determinó en "
+                    f"{rpm_prom:.1f} RPM." if rpm_prom else "Medición ejecutada satisfactoriamente.",
+                    height=90)
+            with ci4:
+                i_observaciones = st.text_area("Observaciones",
+                    "Se recomienda continuar el monitoreo periódico de los niveles de vibración.",
+                    height=90)
 
-        btn_generar = st.form_submit_button("⚡ Compilar Informe Técnico", use_container_width=True)
+        with tab_resp:
+            cr1, cr2, cr3 = st.columns(3)
+            with cr1:
+                i_realizo = st.text_input("Realizó (Técnico)", "Técnico de Ensayos")
+            with cr2:
+                i_reviso  = st.text_input("Revisó (Ingeniero)", "Ing. Vibraciones")
+            with cr3:
+                i_aprobo  = st.text_input("Aprobó (Líder)", "Director de Laboratorio")
 
-    if btn_generar or "informe_compilado" in st.session_state:
-        st.session_state["informe_compilado"] = True
-        
-        metadatos_doc = {
-            'proyecto': inf_proyecto,
-            'categoria': inf_categoria,
-            'tipo_proyecto': inf_tipo,
-            'centro_costo': inf_centro_costo,
-            'referencia': inf_referencia,
-            'estado': inf_estado,
-            'avance': inf_avance,
-            'fecha': inf_fecha,
-            'objetivo': inf_objetivo,
-            'conclusiones': inf_conclusiones,
-            'observaciones': inf_observaciones,
-            'responsable_realizo': inf_realizo,
-            'responsable_reviso': inf_reviso,
-            'responsable_aprobo': inf_aprobo
-        }
-        
-        parametros_doc = {
-            'rpm_nominal': rpm_nominal,
-            'fs': fs,
-            'freqplot': freqplot,
-            'tolerancia_hz': tolerancia_hz
-        }
-        
-        col_down1, col_down2 = st.columns(2)
-        
-        # 1. Generar PDF con ReportLab
-        if REPORTLAB_DISPONIBLE:
+        btn_gen = st.form_submit_button("⚡ Generar Informe Técnico", use_container_width=True)
+
+    if btn_gen:
+        st.session_state["informe_listo"] = True
+        meta = dict(
+            proyecto=i_proyecto, modulo=i_modulo, categoria=i_categoria,
+            tipo_proyecto=i_tipo, referencia=i_referencia, centro_costo=i_costo,
+            estado=i_estado, avance=i_avance, fecha=i_fecha,
+            objetivo=i_objetivo, palabras_clave=i_palabras,
+            aspectos_preliminares=i_aspectos,
+            conclusiones=i_conclusiones, observaciones=i_observaciones,
+            responsable_realizo=i_realizo, responsable_reviso=i_reviso,
+            responsable_aprobo=i_aprobo
+        )
+        params = dict(rpm_nominal=rpm_nominal, fs=fs, freqplot=freqplot, tolerancia_hz=tolerancia_hz)
+        st.session_state["meta_guardada"]   = meta
+        st.session_state["params_guardados"] = params
+
+    if st.session_state.get("informe_listo"):
+        meta   = st.session_state["meta_guardada"]
+        params = st.session_state["params_guardados"]
+
+        dc1, dc2 = st.columns(2)
+
+        if REPORTLAB_OK:
             try:
                 pdf_bytes = generar_pdf_reportlab(
-                    metadatos_doc, parametros_doc,
-                    ensayos_base_res, rpm_promedio, rpm_std, rms_promedio,
-                    ensayo_carga_res, imagenes_para_pdf
+                    meta, params, ensayos_base, rpm_prom, rpm_std, rms_prom,
+                    ensayo_dif, imagenes_pdf
                 )
-                with col_down1:
+                ref = meta.get('referencia','IT')
+                fecha_fn = datetime.date.today().strftime('%Y%m%d')
+                with dc1:
                     st.download_button(
-                        label="📥 Descargar Informe Técnico Oficial (.PDF)",
-                        data=pdf_bytes,
-                        file_name=f"Informe_Tecnico_RPM_{inf_referencia}_{datetime.date.today().strftime('%Y%m%d')}.pdf",
-                        mime="application/pdf",
+                        "📥 Descargar Informe Técnico PDF",
+                        pdf_bytes,
+                        f"InformeTecnico_{ref}_{fecha_fn}.pdf",
+                        "application/pdf",
                         use_container_width=True
                     )
-            except Exception as e:
-                with col_down1:
-                    st.error(f"Error al generar PDF: {e}")
+            except Exception as ex:
+                dc1.error(f"Error PDF: {ex}")
         else:
-            with col_down1:
-                st.warning("Instala 'reportlab' para generar el PDF automáticamente.")
-                
-        # 2. Generar código LaTeX (.tex)
+            dc1.warning("Instala `reportlab` para generar PDF.")
+
         try:
-            tex_content = generar_codigo_latex(
-                metadatos_doc, parametros_doc,
-                ensayos_base_res, rpm_promedio, rpm_std, rms_promedio,
-                ensayo_carga_res
-            )
-            with col_down2:
+            tex = generar_codigo_latex(meta, params, ensayos_base, rpm_prom, rpm_std, rms_prom, ensayo_dif)
+            with dc2:
                 st.download_button(
-                    label="📥 Descargar Código Fuente (.TEX / LaTeX)",
-                    data=tex_content,
-                    file_name=f"Informe_Tecnico_RPM_{inf_referencia}.tex",
-                    mime="text/plain",
-                    use_container_width=True
+                    "📥 Descargar Código LaTeX (.tex)",
+                    tex, f"InformeTecnico_{meta.get('referencia','IT')}.tex",
+                    "text/plain", use_container_width=True
                 )
-        except Exception as e:
-            with col_down2:
-                st.error(f"Error al generar LaTeX: {e}")
+        except Exception as ex:
+            dc2.error(f"Error LaTeX: {ex}")
 
 else:
-    st.info("👆 Por favor sube al menos un archivo CSV en los slots superiores o haz clic en **'Cargar Medición Demo'** para procesar los datos.")
+    st.markdown("""
+    <div class="banner-info" style="text-align:center; padding: 32px;">
+      <div style="font-size:2.5rem; margin-bottom:10px;">📁</div>
+      <strong>Sube al menos un archivo CSV en los slots superiores</strong><br>
+      o haz clic en <em>"🧪 Demo"</em> para ver la plataforma en acción.
+    </div>""", unsafe_allow_html=True)
