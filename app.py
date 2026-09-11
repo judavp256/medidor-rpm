@@ -7,10 +7,15 @@ import datetime
 
 try:
     from report_generator import (generar_imagen_fft, generar_imagen_superposicion,
-                                   generar_pdf_reportlab, generar_codigo_latex)
+                                   generar_pdf_reportlab, generar_codigo_latex, generar_docx)
     REPORTLAB_OK = True
+    DOCX_OK = True
+except ImportError as _e:
+    REPORTLAB_OK = 'generar_pdf_reportlab' not in str(_e)
+    DOCX_OK = 'generar_docx' not in str(_e)
 except Exception:
     REPORTLAB_OK = False
+    DOCX_OK = False
 
 # ── Configuración de página ─────────────────────────────────────
 st.set_page_config(
@@ -325,13 +330,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-with st.container():
-    col_desc, col_demo = st.columns([3, 1])
-    with col_desc:
-        st.caption("Carga de 1 a 4 mediciones. Ningún slot es obligatorio — la plataforma se adapta a los archivos disponibles.")
-    with col_demo:
-        usar_demo = st.button("🧪 Demo (4 mediciones simuladas)", use_container_width=True)
 
+with st.container():
+    st.caption("Carga de 1 a 4 mediciones. Ningún slot es obligatorio — la plataforma se adapta a los archivos disponibles.")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         f1 = st.file_uploader("Medición 1", type=["csv","txt"], key="f1",
@@ -347,30 +348,16 @@ with st.container():
                                type=["csv","txt"], key="f4", label_visibility="visible")
 
 archivos_cargados = []
+for i, fobj in enumerate([f1, f2, f3, f4]):
+    if fobj:
+        arr = parsear_csv(fobj)
+        if arr is not None:
+            base_count = sum(1 for a in archivos_cargados if a['tipo'] == 'base')
+            tipo = 'diferente' if (i == 3 and base_count >= 1) else 'base'
+            archivos_cargados.append({'slot': i+1, 'nombre': fobj.name,
+                                       'tipo': tipo, 'data': arr})
 
-if usar_demo:
-    L = int(fs * 1.5); t = np.arange(L) / fs
-    for i, fr in enumerate([29.14, 29.16, 29.13]):
-        s = (0.45*np.sin(2*np.pi*fr*t) + 0.18*np.sin(2*np.pi*2*fr*t) +
-             0.08*np.sin(2*np.pi*3*fr*t) + np.random.normal(0, 0.04, L))
-        archivos_cargados.append({'slot': i+1, 'nombre': f'Demo_Medicion_{i+1}.csv',
-                                   'tipo': 'base', 'data': s})
-    fc = 27.0
-    sc = (0.38*np.sin(2*np.pi*fc*t) + 0.22*np.sin(2*np.pi*2*fc*t) +
-          np.random.normal(0, 0.05, L))
-    archivos_cargados.append({'slot': 4, 'nombre': 'Demo_Medicion_4_diferente.csv',
-                               'tipo': 'diferente', 'data': sc})
-    st.info("💡 Modo Demo activado: mediciones 1–3 a ~1748 RPM · Medición 4 a ~1620 RPM")
-else:
-    for i, fobj in enumerate([f1, f2, f3, f4]):
-        if fobj:
-            arr = parsear_csv(fobj)
-            if arr is not None:
-                # La 4ta es "diferente condición" solo si ya hay 3 base
-                base_count = sum(1 for a in archivos_cargados if a['tipo'] == 'base')
-                tipo = 'diferente' if (i == 3 and base_count >= 1) else 'base'
-                archivos_cargados.append({'slot': i+1, 'nombre': fobj.name,
-                                           'tipo': tipo, 'data': arr})
+
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -678,27 +665,26 @@ if archivos_cargados:
 
         dc1, dc2 = st.columns(2)
 
-        if REPORTLAB_OK:
-            try:
-                pdf_bytes = generar_pdf_reportlab(
-                    meta, params, ensayos_base, rpm_prom, rpm_std, rms_prom,
-                    ensayo_dif, imagenes_pdf
+        # ── Descarga Word (.docx) ──────────────────────────────────
+        try:
+            docx_bytes = generar_docx(
+                meta, params, ensayos_base, rpm_prom, rpm_std, rms_prom,
+                ensayo_dif, imagenes_pdf
+            )
+            ref = meta.get('referencia', 'IT')
+            fecha_fn = datetime.date.today().strftime('%Y%m%d')
+            with dc1:
+                st.download_button(
+                    "📄 Descargar Informe Técnico Word (.docx)",
+                    docx_bytes,
+                    f"InformeTecnico_{ref}_{fecha_fn}.docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
                 )
-                ref = meta.get('referencia','IT')
-                fecha_fn = datetime.date.today().strftime('%Y%m%d')
-                with dc1:
-                    st.download_button(
-                        "📥 Descargar Informe Técnico PDF",
-                        pdf_bytes,
-                        f"InformeTecnico_{ref}_{fecha_fn}.pdf",
-                        "application/pdf",
-                        use_container_width=True
-                    )
-            except Exception as ex:
-                dc1.error(f"Error PDF: {ex}")
-        else:
-            dc1.warning("Instala `reportlab` para generar PDF.")
+        except Exception as ex:
+            dc1.error(f"Error Word: {ex}")
 
+        # ── Descarga LaTeX (.tex) ──────────────────────────────────
         try:
             tex = generar_codigo_latex(meta, params, ensayos_base, rpm_prom, rpm_std, rms_prom, ensayo_dif)
             with dc2:
@@ -715,5 +701,5 @@ else:
     <div class="banner-info" style="text-align:center; padding: 32px;">
       <div style="font-size:2.5rem; margin-bottom:10px;">📁</div>
       <strong>Sube al menos un archivo CSV en los slots superiores</strong><br>
-      o haz clic en <em>"🧪 Demo"</em> para ver la plataforma en acción.
+      <span style="font-size:0.85rem; opacity:0.8;">La plataforma procesará y visualizará los espectros FFT automáticamente.</span>
     </div>""", unsafe_allow_html=True)

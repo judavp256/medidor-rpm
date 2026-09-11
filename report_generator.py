@@ -531,3 +531,447 @@ def generar_pdf_reportlab(meta, params, resultados, rpm_prom, rpm_std,
     doc.build(story)
     buf.seek(0)
     return buf.getvalue()
+
+
+# ─────────────────────────────────────────────────────────────────
+# Generador de Word (.docx) — Fiel al Formato_IT_NUEVO.docx
+# ─────────────────────────────────────────────────────────────────
+def generar_docx(meta, params, resultados, rpm_prom, rpm_std,
+                 rms_prom, res_dif, imagenes_bytes):
+    """
+    Genera un documento Word (.docx) con la estructura exacta del
+    Formato_IT_NUEVO.docx: tablas de encabezado, metadatos, objetivo,
+    secciones 1-7 y bloque de firmas.
+    """
+    from docx import Document
+    from docx.shared import Pt, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    # ── Colores institucionales ───────────────────────────────────
+    C_PRIMARY = RGBColor(0x1F, 0x49, 0x7D)
+    C_WHITE   = RGBColor(0xFF, 0xFF, 0xFF)
+    HEX_PRIMARY = '1F497D'
+    HEX_ACCENT  = '4F81BD'
+    HEX_LABEL   = 'F2F2F2'
+    HEX_LIGHT   = 'F8F9FA'
+    HEX_AMBER   = 'FFF3CD'
+
+    fecha = meta.get('fecha', datetime.date.today().strftime('%d/%m/%Y'))
+
+    doc = Document()
+
+    # ── Página: Carta, márgenes 2 cm ─────────────────────────────
+    for sec in doc.sections:
+        sec.page_width    = Cm(21.59)
+        sec.page_height   = Cm(27.94)
+        sec.left_margin   = Cm(2)
+        sec.right_margin  = Cm(2)
+        sec.top_margin    = Cm(2)
+        sec.bottom_margin = Cm(2)
+
+    # ── Fuente por defecto ────────────────────────────────────────
+    doc.styles['Normal'].font.name = 'Calibri'
+    doc.styles['Normal'].font.size = Pt(9)
+
+    # ── Helpers ───────────────────────────────────────────────────
+    def _shade(cell, hex_color):
+        tc   = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd  = tcPr.find(qn('w:shd'))
+        if shd is None:
+            shd = OxmlElement('w:shd')
+            tcPr.append(shd)
+        shd.set(qn('w:val'),   'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'),  hex_color.lstrip('#'))
+
+    def _ctext(cell, text, bold=False, color=None, size=8.5,
+               align=WD_ALIGN_PARAGRAPH.LEFT):
+        para = cell.paragraphs[0]
+        para.clear()
+        para.alignment = align
+        para.paragraph_format.space_before = Pt(2)
+        para.paragraph_format.space_after  = Pt(2)
+        run = para.add_run(str(text))
+        run.bold = bold
+        run.font.size = Pt(size)
+        run.font.name = 'Calibri'
+        if color:
+            run.font.color.rgb = color
+
+    def _borders(table, color='BFBFBF'):
+        tbl  = table._tbl
+        tblP = tbl.find(qn('w:tblPr'))
+        if tblP is None:
+            tblP = OxmlElement('w:tblPr')
+            tbl.insert(0, tblP)
+        old = tblP.find(qn('w:tblBorders'))
+        if old is not None:
+            tblP.remove(old)
+        brd = OxmlElement('w:tblBorders')
+        for name in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+            b = OxmlElement(f'w:{name}')
+            b.set(qn('w:val'),   'single')
+            b.set(qn('w:sz'),    '4')
+            b.set(qn('w:space'), '0')
+            b.set(qn('w:color'), color.lstrip('#'))
+            brd.append(b)
+        tblP.append(brd)
+
+    def _h1(text):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(10)
+        p.paragraph_format.space_after  = Pt(4)
+        run = p.add_run(text)
+        run.bold = True
+        run.font.size = Pt(12)
+        run.font.color.rgb = C_PRIMARY
+        run.font.name = 'Calibri'
+        pPr = p._p.get_or_add_pPr()
+        pBdr = OxmlElement('w:pBdr')
+        bot  = OxmlElement('w:bottom')
+        bot.set(qn('w:val'),   'single')
+        bot.set(qn('w:sz'),    '6')
+        bot.set(qn('w:space'), '1')
+        bot.set(qn('w:color'), HEX_ACCENT)
+        pBdr.append(bot)
+        pPr.append(pBdr)
+
+    def _body(text):
+        p = doc.add_paragraph(str(text))
+        for r in p.runs:
+            r.font.size = Pt(9)
+            r.font.name = 'Calibri'
+        p.paragraph_format.space_after = Pt(4)
+
+    def _spacer(pt=4):
+        sp = doc.add_paragraph()
+        sp.paragraph_format.space_before = Pt(0)
+        sp.paragraph_format.space_after  = Pt(pt)
+
+    # ══════════════════════════════════════════════════════════════
+    # TABLA 0: Encabezado (1 fila × 4 columnas) — Formato_IT Table 0
+    # ══════════════════════════════════════════════════════════════
+    tbl0 = doc.add_table(rows=1, cols=4)
+    for i, w in enumerate([Cm(3.2), Cm(8.4), Cm(3.3), Cm(2.9)]):
+        for cell in tbl0.columns[i].cells:
+            cell.width = w
+
+    r0 = tbl0.rows[0]
+
+    # Col 0: espacio para logo
+    _shade(r0.cells[0], HEX_LABEL)
+    _ctext(r0.cells[0], '', size=8)
+
+    # Col 1: Título institucional (fondo azul)
+    _shade(r0.cells[1], HEX_PRIMARY)
+    para1 = r0.cells[1].paragraphs[0]
+    para1.clear()
+    para1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    para1.paragraph_format.space_before = Pt(6)
+    para1.paragraph_format.space_after  = Pt(6)
+    t1a = para1.add_run('INFORME TÉCNICO\n')
+    t1a.bold = True; t1a.font.size = Pt(14)
+    t1a.font.color.rgb = C_WHITE; t1a.font.name = 'Calibri'
+    t1b = para1.add_run('DESCRIPCIÓN DE LA INICIATIVA')
+    t1b.bold = False; t1b.font.size = Pt(9)
+    t1b.font.color.rgb = C_WHITE; t1b.font.name = 'Calibri'
+
+    # Col 2: Módulo label (fondo gris)
+    _shade(r0.cells[2], HEX_LABEL)
+    _ctext(r0.cells[2], 'Módulo:', bold=True, size=8)
+
+    # Col 3: Módulo valor
+    _ctext(r0.cells[3], meta.get('modulo', ''), size=8)
+
+    _borders(tbl0)
+    _spacer(3)
+
+    # ══════════════════════════════════════════════════════════════
+    # TABLA 1: Metadatos (3 filas × 6 columnas) — Formato_IT Table 1
+    # ══════════════════════════════════════════════════════════════
+    tbl1 = doc.add_table(rows=3, cols=6)
+    for i, w in enumerate([Cm(3.0), Cm(3.5), Cm(3.0), Cm(3.5), Cm(2.0), Cm(2.8)]):
+        for cell in tbl1.columns[i].cells:
+            cell.width = w
+
+    # Fila 0: Categoría | Val | Tipo Proy. | Val | Fecha | Val
+    r = tbl1.rows[0]
+    _shade(r.cells[0], HEX_LABEL); _ctext(r.cells[0], 'Categoría de Producto', bold=True, size=8)
+    _ctext(r.cells[1], meta.get('categoria', 'Refrigeración'), size=8)
+    _shade(r.cells[2], HEX_LABEL); _ctext(r.cells[2], 'Tipo de Proyecto', bold=True, size=8)
+    _ctext(r.cells[3], meta.get('tipo_proyecto', 'Portafolio'), size=8)
+    _shade(r.cells[4], HEX_LABEL); _ctext(r.cells[4], 'Fecha', bold=True, size=8)
+    _ctext(r.cells[5], fecha, size=8)
+
+    # Fila 1: Proyecto | Val | C.Costo | Val | Referencia | Val
+    r = tbl1.rows[1]
+    _shade(r.cells[0], HEX_LABEL); _ctext(r.cells[0], 'Proyecto', bold=True, size=8)
+    _ctext(r.cells[1], meta.get('proyecto', ''), size=8)
+    _shade(r.cells[2], HEX_LABEL); _ctext(r.cells[2], 'Centro de Costo', bold=True, size=8)
+    _ctext(r.cells[3], meta.get('centro_costo', ''), size=8)
+    _shade(r.cells[4], HEX_LABEL); _ctext(r.cells[4], 'Referencia', bold=True, size=8)
+    _ctext(r.cells[5], meta.get('referencia', 'N/A'), size=8)
+
+    # Fila 2: Avance | Val | Estado | Val | Resultado | Val
+    r = tbl1.rows[2]
+    _shade(r.cells[0], HEX_LABEL); _ctext(r.cells[0], 'Avance', bold=True, size=8)
+    _ctext(r.cells[1], meta.get('avance', '100%'), size=8)
+    _shade(r.cells[2], HEX_LABEL); _ctext(r.cells[2], 'Estado', bold=True, size=8)
+    _ctext(r.cells[3], meta.get('estado', 'Completado'), size=8)
+    _shade(r.cells[4], HEX_LABEL); _ctext(r.cells[4], 'Resultado', bold=True, size=8)
+    _ctext(r.cells[5], '', size=8)
+
+    _borders(tbl1)
+    _spacer(3)
+
+    # ══════════════════════════════════════════════════════════════
+    # TABLA 2: Objetivo + Palabras clave (2 filas × 3 columnas) — Formato_IT Table 2
+    # ══════════════════════════════════════════════════════════════
+    tbl2 = doc.add_table(rows=2, cols=3)
+    for i, w in enumerate([Cm(3.0), Cm(9.8), Cm(4.0)]):
+        for cell in tbl2.columns[i].cells:
+            cell.width = w
+
+    tbl2.cell(0, 0).merge(tbl2.cell(1, 0))
+    _shade(tbl2.cell(0, 0), HEX_LABEL)
+    _ctext(tbl2.cell(0, 0), 'Objetivo', bold=True, size=8)
+    _ctext(tbl2.cell(0, 1), meta.get('objetivo', ''), size=8)
+    _shade(tbl2.cell(0, 2), HEX_LABEL)
+    _ctext(tbl2.cell(0, 2), 'Palabras Clave', bold=True, size=8)
+    _ctext(tbl2.cell(1, 2), meta.get('palabras_clave', 'Vibración, RPM, FFT, Acelerómetro'), size=8)
+
+    _borders(tbl2)
+    doc.add_page_break()
+
+    # ══════════════════════════════════════════════════════════════
+    # SECCIÓN 1: Aspectos Preliminares
+    # ══════════════════════════════════════════════════════════════
+    _h1('1. Aspectos Preliminares')
+    _body(meta.get('aspectos_preliminares',
+          'Se realizó la caracterización dinámica del equipo bajo análisis.'))
+
+    # ══════════════════════════════════════════════════════════════
+    # SECCIÓN 2: Procedimientos Realizados (con tabla de Pruebas)
+    # ══════════════════════════════════════════════════════════════
+    _h1('2. Procedimientos Realizados')
+    tbl3 = doc.add_table(rows=3, cols=3)
+    for i, w in enumerate([Cm(11.0), Cm(3.0), Cm(2.8)]):
+        for cell in tbl3.columns[i].cells:
+            cell.width = w
+
+    r = tbl3.rows[0]
+    for i, lbl in enumerate(['Pruebas', 'No Cumple', 'Cumple']):
+        _shade(r.cells[i], HEX_PRIMARY)
+        _ctext(r.cells[i], lbl, bold=True, color=C_WHITE, size=8,
+               align=WD_ALIGN_PARAGRAPH.CENTER)
+
+    for idx, (prueba, nc, c) in enumerate([
+        ('Medición de vibración con acelerómetro', '', 'X'),
+        ('Análisis espectral FFT', '', 'X'),
+    ]):
+        r = tbl3.rows[idx + 1]
+        if idx % 2 == 1:
+            for cell in r.cells:
+                _shade(cell, HEX_LIGHT)
+        _ctext(r.cells[0], prueba, size=8)
+        _ctext(r.cells[1], nc, size=8, align=WD_ALIGN_PARAGRAPH.CENTER)
+        _ctext(r.cells[2], c,  size=8, align=WD_ALIGN_PARAGRAPH.CENTER)
+
+    _borders(tbl3)
+    _spacer()
+
+    # ══════════════════════════════════════════════════════════════
+    # SECCIÓN 3: Detalles Técnicos
+    # ══════════════════════════════════════════════════════════════
+    _h1('3. Detalles Técnicos')
+    p_det = doc.add_paragraph()
+    p_det.paragraph_format.space_after = Pt(4)
+    for txt, bold in [
+        ('Frecuencia de Muestreo (Fs): ', True),
+        (f"{params.get('fs', 11628)} Hz     ", False),
+        ('RPM Nominal de Placa: ', True),
+        (f"{params.get('rpm_nominal', 1750):.0f} RPM  ({params.get('rpm_nominal', 1750)/60.0:.2f} Hz)\n", False),
+        ('Rango de Frecuencias Analizado: ', True),
+        (f"0 a {params.get('freqplot', 200)} Hz     ", False),
+        ('Tolerancia Armónicos: ', True),
+        (f"±{params.get('tolerancia_hz', 1.5)} Hz", False),
+    ]:
+        run = p_det.add_run(str(txt))
+        run.bold = bold
+        run.font.size = Pt(9)
+        run.font.name = 'Calibri'
+        if bold:
+            run.font.color.rgb = C_PRIMARY
+
+    # ══════════════════════════════════════════════════════════════
+    # SECCIÓN 4: Resultados Obtenidos
+    # ══════════════════════════════════════════════════════════════
+    _h1('4. Resultados Obtenidos')
+
+    n_extra = 1 if (res_dif and res_dif.get('f_1x')) else 0
+    tbl4 = doc.add_table(rows=1 + len(resultados) + n_extra, cols=6)
+    for i, w in enumerate([Cm(2.4), Cm(4.5), Cm(2.5), Cm(2.5), Cm(2.3), Cm(2.6)]):
+        for cell in tbl4.columns[i].cells:
+            cell.width = w
+
+    # Encabezado tabla resultados
+    r = tbl4.rows[0]
+    for i, lbl in enumerate(['Medición', 'Nombre Archivo', 'Frec. 1X [Hz]',
+                              'RPM Medida', 'Amp. 1X', 'RMS [m/s²]']):
+        _shade(r.cells[i], HEX_PRIMARY)
+        _ctext(r.cells[i], lbl, bold=True, color=C_WHITE, size=8,
+               align=WD_ALIGN_PARAGRAPH.CENTER)
+
+    # Filas de datos
+    for idx, res in enumerate(resultados):
+        r = tbl4.rows[idx + 1]
+        if idx % 2 == 1:
+            for cell in r.cells:
+                _shade(cell, HEX_LIGHT)
+        f_str  = f"{res['f_1x']:.2f}"   if res.get('f_1x')  else '—'
+        rp_str = f"{res['rpm']:.1f}"    if res.get('rpm')    else 'No detectado'
+        am_str = f"{res['amp_1x']:.4f}" if res.get('amp_1x') else '—'
+        vals   = [f'Medición {idx+1}', res.get('nombre', ''),
+                  f_str, rp_str, am_str, f"{res['rms']:.4f}"]
+        for i, v in enumerate(vals):
+            align = WD_ALIGN_PARAGRAPH.CENTER if i >= 2 else WD_ALIGN_PARAGRAPH.LEFT
+            _ctext(r.cells[i], v, bold=(i == 3 and bool(res.get('rpm'))),
+                   size=8, align=align)
+
+    # Fila medición diferente
+    if res_dif and res_dif.get('f_1x'):
+        r = tbl4.rows[-1]
+        _shade(r.cells[0], HEX_AMBER)
+        vals = ['Med. 4 (Diferente)', res_dif.get('nombre', ''),
+                f"{res_dif['f_1x']:.2f}", f"{res_dif.get('rpm', 0):.1f}",
+                f"{res_dif.get('amp_1x', 0):.4f}", f"{res_dif['rms']:.4f}"]
+        for i, v in enumerate(vals):
+            align = WD_ALIGN_PARAGRAPH.CENTER if i >= 2 else WD_ALIGN_PARAGRAPH.LEFT
+            _ctext(r.cells[i], v, bold=(i == 3), size=8, align=align)
+
+    _borders(tbl4)
+
+    # Resumen estadístico
+    rpm_p_str = f"{rpm_prom:.1f} RPM" if rpm_prom else "No determinado"
+    p_sum = doc.add_paragraph()
+    p_sum.paragraph_format.space_before = Pt(6)
+    p_sum.paragraph_format.space_after  = Pt(4)
+    for txt, bold in [
+        ('RPM Promedio (base): ', True),
+        (f'{rpm_p_str}     ', False),
+        ('Dispersión: ', True),
+        (f'±{rpm_std:.2f} RPM     ', False),
+        ('RMS Promedio: ', True),
+        (f'{rms_prom:.4f} m/s²', False),
+    ]:
+        run = p_sum.add_run(str(txt))
+        run.bold = bold
+        run.font.size = Pt(9)
+        run.font.name = 'Calibri'
+        if bold:
+            run.font.color.rgb = C_PRIMARY
+
+    # Diagnóstico
+    if res_dif and res_dif.get('rpm') and rpm_prom:
+        delta = rpm_prom - res_dif['rpm']
+        pct   = abs(delta / rpm_prom) * 100
+        p_dx  = doc.add_paragraph()
+        p_dx.paragraph_format.space_before = Pt(3)
+        p_dx.paragraph_format.space_after  = Pt(4)
+        r_lbl = p_dx.add_run('Diagnóstico: ')
+        r_lbl.bold = True
+        r_lbl.font.size = Pt(9)
+        r_lbl.font.color.rgb = C_PRIMARY
+        r_lbl.font.name = 'Calibri'
+        txt_dx = (
+            f"La Medición 4 registró {res_dif['rpm']:.1f} RPM, una reducción de "
+            f"{delta:.1f} RPM ({pct:.1f}%) respecto a las mediciones base. "
+            "Esto confirma que el pico corresponde a la rotación mecánica real del eje."
+            if delta > 0 else
+            f"La Medición 4 registró {res_dif['rpm']:.1f} RPM "
+            f"(variación de {abs(delta):.1f} RPM, {pct:.1f}%)."
+        )
+        r_txt = p_dx.add_run(txt_dx)
+        r_txt.font.size = Pt(9)
+        r_txt.font.name = 'Calibri'
+
+    # Imágenes embebidas de los gráficos
+    if imagenes_bytes:
+        sup_item = None
+        for titulo_img, img_data in imagenes_bytes:
+            if 'Superposición' in titulo_img:
+                sup_item = (titulo_img, img_data)
+                continue
+            _spacer(4)
+            p_lbl = doc.add_paragraph()
+            p_lbl.paragraph_format.space_before = Pt(6)
+            r_lbl = p_lbl.add_run(titulo_img)
+            r_lbl.italic = True
+            r_lbl.font.size = Pt(8.5)
+            r_lbl.font.color.rgb = C_PRIMARY
+            r_lbl.font.name = 'Calibri'
+            img_data.seek(0)
+            doc.add_picture(img_data, width=Cm(16.5))
+            _spacer(3)
+
+        if sup_item:
+            _spacer(4)
+            p_lbl = doc.add_paragraph()
+            p_lbl.paragraph_format.space_before = Pt(6)
+            r_lbl = p_lbl.add_run(sup_item[0])
+            r_lbl.italic = True
+            r_lbl.font.size = Pt(8.5)
+            r_lbl.font.color.rgb = C_PRIMARY
+            r_lbl.font.name = 'Calibri'
+            sup_item[1].seek(0)
+            doc.add_picture(sup_item[1], width=Cm(16.5))
+
+    # ══════════════════════════════════════════════════════════════
+    # SECCIÓN 5: Conclusiones
+    # ══════════════════════════════════════════════════════════════
+    _h1('5. Conclusiones')
+    _body(meta.get('conclusiones',
+          f'La velocidad de rotación en condición base se determinó en {rpm_p_str}.'))
+
+    # ══════════════════════════════════════════════════════════════
+    # SECCIÓN 6: Observaciones
+    # ══════════════════════════════════════════════════════════════
+    _h1('6. Observaciones')
+    _body(meta.get('observaciones',
+          'Se recomienda realizar monitoreo periódico de los niveles de vibración global.'))
+
+    # ══════════════════════════════════════════════════════════════
+    # SECCIÓN 7: Responsables (tabla de firmas — 3 columnas)
+    # ══════════════════════════════════════════════════════════════
+    _h1('7. Responsables')
+    _spacer(8)
+
+    tbl_s = doc.add_table(rows=4, cols=3)
+    for col in tbl_s.columns:
+        for cell in col.cells:
+            cell.width = Cm(5.8)
+
+    sign_rows = [
+        [meta.get('responsable_realizo', ''),
+         meta.get('responsable_reviso', ''),
+         meta.get('responsable_aprobo', '')],
+        ['─' * 30, '─' * 30, '─' * 30],
+        ['Realizó', 'Revisó', 'Aprobó'],
+        [fecha, fecha, fecha],
+    ]
+    sign_bold = [False, False, True, False]
+
+    for ri, row_data in enumerate(sign_rows):
+        r = tbl_s.rows[ri]
+        for ci, txt in enumerate(row_data):
+            _ctext(r.cells[ci], txt, bold=sign_bold[ri], size=8.5,
+                   align=WD_ALIGN_PARAGRAPH.CENTER)
+
+    # ── Guardar en BytesIO ────────────────────────────────────────
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.getvalue()

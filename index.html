@@ -8,6 +8,7 @@
   <!-- CDN Libraries -->
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 
@@ -338,13 +339,6 @@
         <label class="sidebar-label">Armónicos a marcar (1X, 2X…)</label>
         <input class="sidebar-input" id="n-arm" type="number" value="3" min="1" max="6"/>
 
-        <hr class="sidebar-divider"/>
-        <button class="btn-action btn-demo" onclick="cargarDemo()" style="width:100%;text-align:center;">
-          🧪 Demo (4 mediciones simuladas)
-        </button>
-        <button class="btn-action btn-reset" onclick="resetTodo()" style="width:100%;margin-top:8px;text-align:center;">
-          🔄 Reiniciar Todo
-        </button>
       </aside>
 
       <!-- ═══ CONTENIDO PRINCIPAL ════════════════════════════════ -->
@@ -567,9 +561,10 @@
           </div>
 
           <div class="action-bar">
-            <button class="btn-action btn-gen" onclick="generarInforme()">⚡ Generar Informe LaTeX (.tex)</button>
-            <button class="btn-action btn-action btn-gen" style="background:linear-gradient(135deg,#1a7f4e,#27ae60);"
-                    onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+            <button class="btn-action btn-gen" onclick="generarWord()">📄 Generar Informe Word (.docx)</button>
+            <button class="btn-action btn-gen" onclick="generarLatex()" style="background:linear-gradient(135deg,#1F497D,#4BACC6);">📥 Descargar LaTeX (.tex)</button>
+            <button class="btn-action btn-gen" style="background:linear-gradient(135deg,#1a7f4e,#27ae60);"
+                    onclick="window.print()">🖨️ Imprimir / PDF</button>
           </div>
           <div id="latex-download-wrap" style="display:none;margin-top:12px;"></div>
         </div>
@@ -975,32 +970,432 @@ function procesarTodo() {
   window._stats = { rpm_prom, rpm_std, rms_prom, rpmN, sr, fmax, tolHz };
 }
 
-// ─── Generar LaTeX ──────────────────────────────────────────────
-function generarInforme() {
+// ─── Recopilar metadatos del formulario ─────────────────────────
+function _getMeta() {
+  return {
+    proyecto:     document.getElementById('f-proyecto').value,
+    modulo:       document.getElementById('f-modulo').value,
+    categoria:    document.getElementById('f-categoria').value,
+    tipo_proy:    document.getElementById('f-tipo').value,
+    referencia:   document.getElementById('f-referencia').value,
+    costo:        document.getElementById('f-costo').value,
+    estado:       document.getElementById('f-estado').value,
+    avance:       document.getElementById('f-avance').value,
+    fecha:        document.getElementById('f-fecha').value.split('-').reverse().join('/'),
+    palabras:     document.getElementById('f-palabras').value,
+    objetivo:     document.getElementById('f-objetivo').value,
+    aspectos:     document.getElementById('f-aspectos').value,
+    conclusiones: document.getElementById('f-conclusiones').value,
+    observaciones:document.getElementById('f-observaciones').value,
+    realizo:      document.getElementById('f-realizo').value,
+    reviso:       document.getElementById('f-reviso').value,
+    aprobo:       document.getElementById('f-aprobo').value,
+  };
+}
+
+// ─── Generar Word (.docx) usando docx.js ────────────────────────
+async function generarWord() {
   const proc = window._procesados;
   const st   = window._stats;
   if (!proc) { alert('Primero procesa las mediciones.'); return; }
 
-  const meta = {
-    proyecto:    document.getElementById('f-proyecto').value,
-    modulo:      document.getElementById('f-modulo').value,
-    categoria:   document.getElementById('f-categoria').value,
-    tipo_proy:   document.getElementById('f-tipo').value,
-    referencia:  document.getElementById('f-referencia').value,
-    costo:       document.getElementById('f-costo').value,
-    estado:      document.getElementById('f-estado').value,
-    avance:      document.getElementById('f-avance').value,
-    fecha:       document.getElementById('f-fecha').value.split('-').reverse().join('/'),
-    palabras:    document.getElementById('f-palabras').value,
-    objetivo:    document.getElementById('f-objetivo').value,
-    aspectos:    document.getElementById('f-aspectos').value,
-    conclusiones:document.getElementById('f-conclusiones').value,
-    observaciones:document.getElementById('f-observaciones').value,
-    realizo:     document.getElementById('f-realizo').value,
-    reviso:      document.getElementById('f-reviso').value,
-    aprobo:      document.getElementById('f-aprobo').value,
+  const meta = _getMeta();
+  const base = proc.filter(p => p.tipo === 'base');
+  const diff = proc.find(p => p.tipo === 'diferente') || null;
+
+  const { Document, Paragraph, TextRun, Table, TableRow, TableCell,
+          AlignmentType, WidthType, ShadingType, ImageRun,
+          Packer, convertMillimetersToTwip, HeightRule,
+          BorderStyle, PageOrientation, TableBorderStyle,
+          convertInchesToTwip, Header, PageBreak } = docx;
+
+  // Colores institucionales
+  const C_PRIMARY = '1F497D';
+  const C_ACCENT  = '4F81BD';
+  const C_LABEL   = 'F2F2F2';
+  const C_LIGHT   = 'F8F9FA';
+  const C_WHITE   = 'FFFFFF';
+  const C_AMBER   = 'FFF3CD';
+
+  const cmToTwips = (cm) => Math.round(cm * 567);
+
+  // ── Helper: Celda de tabla con formato ──────────────────────────
+  const mkCell = (text, { bold=false, bg=null, color='000000', align='left',
+                           colspan=1, width=null, size=16, italic=false }={}) => {
+    const shading = bg ? {
+      fill: bg, val: ShadingType.CLEAR, color: 'auto'
+    } : undefined;
+    return new TableCell({
+      columnSpan: colspan,
+      width: width ? { size: width, type: WidthType.DXA } : undefined,
+      shading,
+      verticalAlign: 'center',
+      margins: { top: convertMillimetersToTwip(1), bottom: convertMillimetersToTwip(1),
+                 left: convertMillimetersToTwip(1.5), right: convertMillimetersToTwip(1.5) },
+      children: [new Paragraph({
+        alignment: align === 'center' ? AlignmentType.CENTER :
+                   (align === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT),
+        spacing: { before: 30, after: 30 },
+        children: [new TextRun({
+          text, bold, italic, size, color,
+          font: 'Calibri',
+        })]
+      })]
+    });
   };
 
+  const BORDER = {
+    top:    { style: BorderStyle.SINGLE, size: 4, color: 'BFBFBF' },
+    bottom: { style: BorderStyle.SINGLE, size: 4, color: 'BFBFBF' },
+    left:   { style: BorderStyle.SINGLE, size: 4, color: 'BFBFBF' },
+    right:  { style: BorderStyle.SINGLE, size: 4, color: 'BFBFBF' },
+    insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: 'BFBFBF' },
+    insideVertical:   { style: BorderStyle.SINGLE, size: 4, color: 'BFBFBF' },
+  };
+
+  // ── Obtener imágenes de gráficos ─────────────────────────────
+  const chartImages = [];
+  for (const p of proc) {
+    const el = document.getElementById(`chart-${p.slot}`);
+    if (el && el.children.length > 0) {
+      try {
+        const url = await Plotly.toImage(el, { format: 'png', width: 700, height: 270 });
+        const b64 = url.split(',')[1];
+        const raw = atob(b64);
+        const buf = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+        chartImages.push({ slot: p.slot, tipo: p.tipo, buf: buf.buffer,
+                           label: `Medición ${p.slot} — ${p.tipo === 'diferente' ? 'Condición Diferente' : 'Condición Base'}` });
+      } catch(e) { console.warn('Chart image error slot', p.slot, e); }
+    }
+  }
+
+  // Superposición
+  let supImage = null;
+  const supEl = document.getElementById('chart-sup');
+  if (supEl && supEl.children.length > 0) {
+    try {
+      const url = await Plotly.toImage(supEl, { format: 'png', width: 700, height: 300 });
+      const b64 = url.split(',')[1];
+      const raw = atob(b64);
+      const buf = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+      supImage = buf.buffer;
+    } catch(e) { console.warn('Superposition image error', e); }
+  }
+
+  // ── Párrafo de sección H1 con línea inferior ──────────────────
+  const h1 = (text) => new Paragraph({
+    spacing: { before: 160, after: 60 },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: C_ACCENT, space: 1 } },
+    children: [new TextRun({ text, bold: true, size: 24, color: C_PRIMARY, font: 'Calibri' })]
+  });
+
+  const body = (text) => new Paragraph({
+    spacing: { before: 0, after: 60 },
+    children: [new TextRun({ text: text || '', size: 18, font: 'Calibri' })]
+  });
+
+  const spacer = () => new Paragraph({ spacing: { before: 0, after: 60 }, children: [] });
+
+  // ── TABLA 0: Encabezado ───────────────────────────────────────
+  const tbl0 = new Table({
+    borders: BORDER,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [new TableRow({ children: [
+      mkCell('', { bg: C_LABEL, width: cmToTwips(3.2) }),
+      new TableCell({
+        width: { size: cmToTwips(8.4), type: WidthType.DXA },
+        shading: { fill: C_PRIMARY, val: ShadingType.CLEAR, color: 'auto' },
+        margins: { top: 80, bottom: 80, left: 80, right: 80 },
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: 'INFORME TÉCNICO', bold: true, size: 28, color: C_WHITE, font: 'Calibri' })]
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: 'DESCRIPCIÓN DE LA INICIATIVA', size: 18, color: C_WHITE, font: 'Calibri' })]
+          }),
+        ]
+      }),
+      mkCell('Módulo:', { bg: C_LABEL, bold: true, width: cmToTwips(3.3), size: 16 }),
+      mkCell(meta.modulo, { width: cmToTwips(2.9), size: 16 }),
+    ]})]
+  });
+
+  // ── TABLA 1: Metadatos (3×6) ──────────────────────────────────
+  const tbl1 = new Table({
+    borders: BORDER,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [
+        mkCell('Categoría de Producto', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell(meta.categoria, { size: 16 }),
+        mkCell('Tipo de Proyecto', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell(meta.tipo_proy, { size: 16 }),
+        mkCell('Fecha', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell(meta.fecha, { size: 16 }),
+      ]}),
+      new TableRow({ children: [
+        mkCell('Proyecto', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell(meta.proyecto, { size: 16 }),
+        mkCell('Centro de Costo', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell(meta.costo, { size: 16 }),
+        mkCell('Referencia', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell(meta.referencia, { size: 16 }),
+      ]}),
+      new TableRow({ children: [
+        mkCell('Avance', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell(meta.avance, { size: 16 }),
+        mkCell('Estado', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell(meta.estado, { size: 16 }),
+        mkCell('Resultado', { bg: C_LABEL, bold: true, size: 16 }),
+        mkCell('', { size: 16 }),
+      ]}),
+    ]
+  });
+
+  // ── TABLA 2: Objetivo + Palabras clave ───────────────────────
+  const tbl2 = new Table({
+    borders: BORDER,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [
+        mkCell('Objetivo', { bg: C_LABEL, bold: true, size: 16, width: cmToTwips(3) }),
+        mkCell(meta.objetivo, { size: 16, width: cmToTwips(9.8) }),
+        mkCell('Palabras Clave', { bg: C_LABEL, bold: true, size: 16, width: cmToTwips(4) }),
+      ]}),
+      new TableRow({ children: [
+        mkCell('', { bg: C_LABEL, size: 16, width: cmToTwips(3) }),
+        mkCell('', { size: 16, width: cmToTwips(9.8) }),
+        mkCell(meta.palabras, { size: 16, width: cmToTwips(4) }),
+      ]}),
+    ]
+  });
+
+  // ── TABLA Procedimientos ──────────────────────────────────────
+  const tbl3 = new Table({
+    borders: BORDER,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [
+        mkCell('Pruebas', { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16 }),
+        mkCell('No Cumple', { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16, align: 'center' }),
+        mkCell('Cumple', { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16, align: 'center' }),
+      ]}),
+      new TableRow({ children: [
+        mkCell('Medición de vibración con acelerómetro', { size: 16 }),
+        mkCell('', { size: 16, align: 'center' }),
+        mkCell('X', { size: 16, align: 'center', bold: true }),
+      ]}),
+      new TableRow({ children: [
+        mkCell('Análisis espectral FFT', { bg: C_LIGHT, size: 16 }),
+        mkCell('', { bg: C_LIGHT, size: 16, align: 'center' }),
+        mkCell('X', { bg: C_LIGHT, size: 16, align: 'center', bold: true }),
+      ]}),
+    ]
+  });
+
+  // ── TABLA Resultados ──────────────────────────────────────────
+  const rpm_prom = st.rpm_prom;
+  const rpm_std  = st.rpm_std;
+  const rms_prom = st.rms_prom;
+
+  const resRows = [new TableRow({ children: [
+    mkCell('Medición',       { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16, align: 'center' }),
+    mkCell('Nombre Archivo', { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16 }),
+    mkCell('Frec. 1X [Hz]', { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16, align: 'center' }),
+    mkCell('RPM Medida',    { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16, align: 'center' }),
+    mkCell('Amp. 1X',       { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16, align: 'center' }),
+    mkCell('RMS [m/s²]',    { bg: C_PRIMARY, bold: true, color: C_WHITE, size: 16, align: 'center' }),
+  ]})];
+
+  base.forEach((p, idx) => {
+    const bg = idx % 2 === 1 ? C_LIGHT : C_WHITE;
+    resRows.push(new TableRow({ children: [
+      mkCell(`Medición ${idx+1}`, { bg, size: 16 }),
+      mkCell(p.nombre, { bg, size: 14 }),
+      mkCell(p.pico ? p.pico.f.toFixed(2) : '—', { bg, size: 16, align: 'center' }),
+      mkCell(p.rpm ? p.rpm.toFixed(1) : 'No det.', { bg, bold: !!p.rpm, size: 16, align: 'center', color: p.rpm ? C_PRIMARY : '888888' }),
+      mkCell(p.pico ? p.pico.amp.toFixed(5) : '—', { bg, size: 16, align: 'center' }),
+      mkCell(p.rms.toFixed(5), { bg, size: 16, align: 'center' }),
+    ]}));
+  });
+
+  if (diff && diff.pico) {
+    resRows.push(new TableRow({ children: [
+      mkCell('Med. 4 (Dif.)', { bg: C_AMBER, size: 16 }),
+      mkCell(diff.nombre, { bg: C_AMBER, size: 14 }),
+      mkCell(diff.pico.f.toFixed(2), { bg: C_AMBER, size: 16, align: 'center' }),
+      mkCell(diff.rpm ? diff.rpm.toFixed(1) : '—', { bg: C_AMBER, bold: true, size: 16, align: 'center' }),
+      mkCell(diff.pico.amp.toFixed(5), { bg: C_AMBER, size: 16, align: 'center' }),
+      mkCell(diff.rms.toFixed(5), { bg: C_AMBER, size: 16, align: 'center' }),
+    ]}));
+  }
+
+  const tbl4 = new Table({ borders: BORDER, width: { size: 100, type: WidthType.PERCENTAGE }, rows: resRows });
+
+  // ── Resumen estadístico ───────────────────────────────────────
+  const rpm_str = rpm_prom ? `${rpm_prom.toFixed(1)} RPM` : 'No determinado';
+  const pStat = new Paragraph({ spacing: { before: 80, after: 60 }, children: [
+    new TextRun({ text: 'RPM Promedio (base): ', bold: true, size: 18, color: C_PRIMARY, font: 'Calibri' }),
+    new TextRun({ text: `${rpm_str}     `, size: 18, font: 'Calibri' }),
+    new TextRun({ text: 'Dispersión: ', bold: true, size: 18, color: C_PRIMARY, font: 'Calibri' }),
+    new TextRun({ text: `±${rpm_std.toFixed(2)} RPM     `, size: 18, font: 'Calibri' }),
+    new TextRun({ text: 'RMS Promedio: ', bold: true, size: 18, color: C_PRIMARY, font: 'Calibri' }),
+    new TextRun({ text: `${rms_prom.toFixed(4)} m/s²`, size: 18, font: 'Calibri' }),
+  ]});
+
+  // ── Diagnóstico ───────────────────────────────────────────────
+  const diagParagraphs = [];
+  if (diff && diff.rpm && rpm_prom) {
+    const delta = rpm_prom - diff.rpm;
+    const pct   = Math.abs(delta / rpm_prom * 100);
+    const txt   = delta > 0
+      ? `La Medición 4 registró ${diff.rpm.toFixed(1)} RPM, una reducción de ${delta.toFixed(1)} RPM (${pct.toFixed(1)}%) respecto a la base. Esto confirma que el pico corresponde a la rotación mecánica real del eje.`
+      : `La Medición 4 registró ${diff.rpm.toFixed(1)} RPM (variación de ${Math.abs(delta).toFixed(1)} RPM, ${pct.toFixed(1)}%).`;
+    diagParagraphs.push(new Paragraph({ spacing: { before: 40, after: 60 }, children: [
+      new TextRun({ text: 'Diagnóstico: ', bold: true, size: 18, color: C_PRIMARY, font: 'Calibri' }),
+      new TextRun({ text: txt, size: 18, font: 'Calibri' }),
+    ]}));
+  }
+
+  // ── Imágenes de gráficos ──────────────────────────────────────
+  const imgElements = [];
+  for (const ci of chartImages) {
+    imgElements.push(new Paragraph({ spacing: { before: 80, after: 20 }, children: [
+      new TextRun({ text: ci.label, italic: true, size: 17, color: C_PRIMARY, font: 'Calibri' })
+    ]}));
+    imgElements.push(new Paragraph({ children: [
+      new ImageRun({ data: ci.buf, transformation: { width: 620, height: 240 } })
+    ]}));
+    imgElements.push(spacer());
+  }
+  if (supImage) {
+    imgElements.push(new Paragraph({ spacing: { before: 80, after: 20 }, children: [
+      new TextRun({ text: 'Superposición de Todos los Espectros', italic: true, size: 17, color: C_PRIMARY, font: 'Calibri' })
+    ]}));
+    imgElements.push(new Paragraph({ children: [
+      new ImageRun({ data: supImage, transformation: { width: 620, height: 270 } })
+    ]}));
+  }
+
+  // ── TABLA Firmas ──────────────────────────────────────────────
+  const tblSign = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [
+        mkCell(meta.realizo, { align: 'center', size: 17 }),
+        mkCell(meta.reviso,  { align: 'center', size: 17 }),
+        mkCell(meta.aprobo,  { align: 'center', size: 17 }),
+      ]}),
+      new TableRow({ children: [
+        mkCell('─'.repeat(28), { align: 'center', size: 17 }),
+        mkCell('─'.repeat(28), { align: 'center', size: 17 }),
+        mkCell('─'.repeat(28), { align: 'center', size: 17 }),
+      ]}),
+      new TableRow({ children: [
+        mkCell('Realizó', { bold: true, align: 'center', size: 17 }),
+        mkCell('Revisó',  { bold: true, align: 'center', size: 17 }),
+        mkCell('Aprobó',  { bold: true, align: 'center', size: 17 }),
+      ]}),
+      new TableRow({ children: [
+        mkCell(meta.fecha, { align: 'center', size: 17 }),
+        mkCell(meta.fecha, { align: 'center', size: 17 }),
+        mkCell(meta.fecha, { align: 'center', size: 17 }),
+      ]}),
+    ]
+  });
+
+  // ── Ensamblado del documento ──────────────────────────────────
+  const docObj = new Document({
+    styles: {
+      default: {
+        document: {
+          run: { font: 'Calibri', size: 18 },
+          paragraph: { spacing: { after: 60 } }
+        }
+      }
+    },
+    sections: [{
+      properties: {
+        page: {
+          margin: { top: cmToTwips(2), bottom: cmToTwips(2), left: cmToTwips(2), right: cmToTwips(2) },
+          size: { width: cmToTwips(21.59), height: cmToTwips(27.94) },
+        }
+      },
+      children: [
+        // Portada
+        tbl0, spacer(), tbl1, spacer(), tbl2,
+
+        // Salto de página
+        new Paragraph({ children: [new PageBreak()] }),
+
+        // Sección 1
+        h1('1. Aspectos Preliminares'),
+        body(meta.aspectos),
+        spacer(),
+
+        // Sección 2
+        h1('2. Procedimientos Realizados'),
+        tbl3, spacer(),
+
+        // Sección 3
+        h1('3. Detalles Técnicos'),
+        new Paragraph({ spacing: { before: 0, after: 60 }, children: [
+          new TextRun({ text: 'Frecuencia de Muestreo (Fs): ', bold: true, size: 18, color: C_PRIMARY, font: 'Calibri' }),
+          new TextRun({ text: `${st.sr} Hz     `, size: 18, font: 'Calibri' }),
+          new TextRun({ text: 'RPM Nominal: ', bold: true, size: 18, color: C_PRIMARY, font: 'Calibri' }),
+          new TextRun({ text: `${st.rpmN.toFixed(0)} RPM (${(st.rpmN/60).toFixed(2)} Hz)\n`, size: 18, font: 'Calibri' }),
+          new TextRun({ text: 'Rango Analizado: ', bold: true, size: 18, color: C_PRIMARY, font: 'Calibri' }),
+          new TextRun({ text: `0–${st.fmax} Hz     `, size: 18, font: 'Calibri' }),
+          new TextRun({ text: 'Tolerancia Armónicos: ', bold: true, size: 18, color: C_PRIMARY, font: 'Calibri' }),
+          new TextRun({ text: `±${st.tolHz} Hz`, size: 18, font: 'Calibri' }),
+        ]}),
+        spacer(),
+
+        // Sección 4
+        h1('4. Resultados Obtenidos'),
+        tbl4, spacer(),
+        pStat,
+        ...diagParagraphs,
+        ...imgElements,
+
+        // Sección 5
+        h1('5. Conclusiones'),
+        body(meta.conclusiones),
+        spacer(),
+
+        // Sección 6
+        h1('6. Observaciones'),
+        body(meta.observaciones),
+        spacer(),
+
+        // Sección 7
+        h1('7. Responsables'),
+        spacer(),
+        tblSign,
+      ]
+    }]
+  });
+
+  const blob = await Packer.toBlob(docObj);
+  const url  = URL.createObjectURL(blob);
+  const fecha_fn = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const fname = `InformeTecnico_${meta.referencia || 'IT'}_${fecha_fn}.docx`;
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Generar LaTeX (.tex) ────────────────────────────────────────
+function generarLatex() {
+  const proc = window._procesados;
+  const st   = window._stats;
+  if (!proc) { alert('Primero procesa las mediciones.'); return; }
+
+  const meta = _getMeta();
   const base = proc.filter(p => p.tipo === 'base');
   const diff = proc.find(p => p.tipo === 'diferente') || null;
 
@@ -1024,96 +1419,50 @@ function generarInforme() {
 \\usepackage[top=2cm,bottom=2cm,left=2cm,right=2cm]{geometry}
 \\usepackage{booktabs,tabularx,xcolor,fancyhdr,array}
 \\definecolor{primary}{RGB}{31,73,125}
-\\definecolor{accent}{RGB}{79,129,189}
 \\pagestyle{fancy}\\fancyhf{}
-\\rhead{\\small INFORME TÉCNICO - MEDICIÓN DE RPM}
+\\rhead{\\small INFORME TÉCNICO — MEDICIÓN DE RPM}
 \\lhead{\\small ${meta.proyecto}}
 \\rfoot{\\small Página \\thepage}
 \\begin{document}
-
-% ─── ENCABEZADO ─────────────────────────────────────────────────
 \\begin{center}
 {\\LARGE\\bfseries\\color{primary} INFORME TÉCNICO}\\\\[4pt]
 {\\large ANÁLISIS DE VIBRACIONES Y DETERMINACIÓN DE RPM}\\\\[2pt]
 {\\small Fecha: ${meta.fecha}}
 \\end{center}
-\\vspace{8pt}
+\\vspace{6pt}
 
-% ─── TABLA 0: Módulo ────────────────────────────────────────────
-\\begin{tabular}{|p{2.5cm}|p{8cm}|p{2cm}|p{3cm}|}
-\\hline
-\\rowcolor[HTML]{F2F2F2}\\textbf{Módulo:} & ${meta.modulo} &
-\\cellcolor[HTML]{F2F2F2}\\textbf{Ref.:} & ${meta.referencia} \\\\
-\\hline
+\\begin{tabular}{|p{2.5cm}|p{7cm}|p{2cm}|p{4cm}|}\\hline
+\\rowcolor[HTML]{1F497D}{\\color{white}\\textbf{INFORME TÉCNICO}} &
+\\multicolumn{2}{c|}{\\cellcolor[HTML]{1F497D}{\\color{white}\\textbf{DESCRIPCIÓN DE LA INICIATIVA}}} &
+\\cellcolor[HTML]{F2F2F2}\\textbf{Módulo:} ${meta.modulo} \\\\\\hline
+\\end{tabular}\\vspace{2pt}
+
+\\begin{tabular}{|p{3cm}|p{3.5cm}|p{3cm}|p{3.5cm}|p{1.5cm}|p{2cm}|}\\hline
+\\rowcolor[HTML]{F2F2F2}\\textbf{Categoría} & ${meta.categoria} & \\rowcolor[HTML]{F2F2F2}\\textbf{Tipo Proy.} & ${meta.tipo_proy} & \\rowcolor[HTML]{F2F2F2}\\textbf{Fecha} & ${meta.fecha} \\\\\\hline
+\\rowcolor[HTML]{F2F2F2}\\textbf{Proyecto} & \\multicolumn{2}{l|}{${meta.proyecto}} & \\rowcolor[HTML]{F2F2F2}\\textbf{C. Costo} & \\multicolumn{2}{l|}{${meta.costo}} \\\\\\hline
+\\rowcolor[HTML]{F2F2F2}\\textbf{Avance} & ${meta.avance} & \\rowcolor[HTML]{F2F2F2}\\textbf{Estado} & ${meta.estado} & \\rowcolor[HTML]{F2F2F2}\\textbf{Referencia} & ${meta.referencia} \\\\\\hline
 \\end{tabular}
-\\vspace{4pt}
-
-% ─── TABLA 1: Metadatos ──────────────────────────────────────────
-\\begin{tabular}{|p{2.5cm}|p{3cm}|p{2.5cm}|p{3cm}|p{1.5cm}|p{2cm}|}
-\\hline
-\\rowcolor[HTML]{F2F2F2}\\textbf{Categoría} & ${meta.categoria} &
-\\rowcolor[HTML]{F2F2F2}\\textbf{Tipo Proy.} & ${meta.tipo_proy} &
-\\rowcolor[HTML]{F2F2F2}\\textbf{Fecha} & ${meta.fecha} \\\\
-\\hline
-\\rowcolor[HTML]{F2F2F2}\\textbf{Proyecto} & \\multicolumn{2}{c|}{${meta.proyecto}} &
-\\rowcolor[HTML]{F2F2F2}\\textbf{C. Costo} & \\multicolumn{2}{c|}{${meta.costo}} \\\\
-\\hline
-\\rowcolor[HTML]{F2F2F2}\\textbf{Avance} & ${meta.avance} &
-\\rowcolor[HTML]{F2F2F2}\\textbf{Estado} & ${meta.estado} &
-\\rowcolor[HTML]{F2F2F2}\\textbf{Resultado} & \\\\
-\\hline
-\\end{tabular}
-\\vspace{4pt}
-
-% ─── TABLA 2: Objetivo ───────────────────────────────────────────
-\\begin{tabular}{|p{2.5cm}|p{9cm}|p{4cm}|}
-\\hline
-\\rowcolor[HTML]{F2F2F2}\\textbf{Objetivo} & ${meta.objetivo} &
-\\rowcolor[HTML]{F2F2F2}\\textbf{Palabras clave:} ${meta.palabras} \\\\
-\\hline
-\\end{tabular}
-\\vspace{10pt}
-
-\\tableofcontents
-\\newpage
 
 \\section{Aspectos Preliminares}
 ${meta.aspectos}
 
 \\section{Procedimientos Realizados}
-\\begin{tabular}{|l|c|c|}
-\\hline
-\\rowcolor[HTML]{1F497D}{\\color{white}\\textbf{Prueba}} &
-{\\color{white}\\textbf{No cumple}} &
-{\\color{white}\\textbf{Cumple}} \\\\
-\\hline
+\\begin{tabular}{|p{11cm}|c|c|}\\hline
+\\rowcolor[HTML]{1F497D}{\\color{white}\\textbf{Prueba}} & {\\color{white}\\textbf{No cumple}} & {\\color{white}\\textbf{Cumple}} \\\\\\hline
 Medición de vibración con acelerómetro & & X \\\\\\hline
 Análisis espectral FFT & & X \\\\\\hline
 \\end{tabular}
 
 \\section{Detalles Técnicos}
-\\textbf{Frecuencia de Muestreo (Fs):} ${st.sr} Hz \\quad
-\\textbf{RPM Nominal:} ${st.rpmN.toFixed(0)} RPM (${(st.rpmN/60).toFixed(2)} Hz) \\\\
-\\textbf{Rango Analizado:} 0--${st.fmax} Hz \\quad
-\\textbf{Tolerancia armónicos:} $\\pm${st.tolHz}$ Hz
+\\textbf{Fs:} ${st.sr} Hz \\quad \\textbf{RPM Nominal:} ${st.rpmN.toFixed(0)} (${(st.rpmN/60).toFixed(2)} Hz) \\quad \\textbf{Rango:} 0--${st.fmax} Hz \\quad \\textbf{Tolerancia:} $\\pm${st.tolHz}$ Hz
 
 \\section{Resultados Obtenidos}
-\\begin{tabular}{|l|l|c|c|c|c|}
-\\hline
-\\rowcolor[HTML]{1F497D}
-{\\color{white}\\textbf{Ensayo}} &
-{\\color{white}\\textbf{Archivo}} &
-{\\color{white}\\textbf{Frec. 1X [Hz]}} &
-{\\color{white}\\textbf{RPM}} &
-{\\color{white}\\textbf{Amp. 1X}} &
-{\\color{white}\\textbf{RMS [m/s²]}} \\\\
-\\hline
+\\begin{tabular}{|l|l|c|c|c|c|}\\hline
+\\rowcolor[HTML]{1F497D}{\\color{white}\\textbf{Ensayo}} & {\\color{white}\\textbf{Archivo}} & {\\color{white}\\textbf{1X [Hz]}} & {\\color{white}\\textbf{RPM}} & {\\color{white}\\textbf{Amp.}} & {\\color{white}\\textbf{RMS}} \\\\\\hline
 ${rows_lat}\\end{tabular}
+\\vspace{4pt}
 
-\\vspace{6pt}
-\\textbf{RPM Promedio (base):} \\textcolor{primary}{\\textbf{${rpm_str}}} \\quad
-\\textbf{Dispersión:} $\\pm${st.rpm_std.toFixed(2)}$ RPM \\quad
-\\textbf{RMS Promedio:} ${st.rms_prom.toFixed(4)} m/s²
+\\textbf{RPM Promedio:} \\textcolor{primary}{${rpm_str}} \\quad \\textbf{Dispersión:} $\\pm${st.rpm_std.toFixed(2)}$ RPM \\quad \\textbf{RMS:} ${st.rms_prom.toFixed(4)} m/s²
 
 \\section{Conclusiones}
 ${meta.conclusiones}
@@ -1122,26 +1471,20 @@ ${meta.conclusiones}
 ${meta.observaciones}
 
 \\section{Responsables}
-\\begin{center}
-\\begin{tabular}{p{4.5cm} p{4.5cm} p{4.5cm}}
-\\hline
-\\centering ${meta.realizo} & \\centering ${meta.reviso} & \\centering ${meta.aprobo} \\\\
+\\begin{center}\\begin{tabular}{p{4.5cm} p{4.5cm} p{4.5cm}}
+\\hline\\centering ${meta.realizo} & \\centering ${meta.reviso} & \\centering ${meta.aprobo} \\\\
 \\centering\\textbf{Realizó} & \\centering\\textbf{Revisó} & \\centering\\textbf{Aprobó} \\\\
 \\centering ${meta.fecha} & \\centering ${meta.fecha} & \\centering ${meta.fecha} \\\\
-\\end{tabular}
-\\end{center}
+\\end{tabular}\\end{center}
 
 \\end{document}`;
 
   const blob  = new Blob([tex], { type: 'text/plain' });
   const url   = URL.createObjectURL(blob);
-  const fecha_fn = new Date().toISOString().slice(0, 10).replace(/-/g,'');
-  const fname = `InformeTecnico_${meta.referencia || 'IT'}_${fecha_fn}.tex`;
+  const fecha_fn = new Date().toISOString().slice(0,10).replace(/-/g,'');
   const a = document.createElement('a');
-  a.href = url; a.download = fname; a.click();
+  a.href = url; a.download = `InformeTecnico_${meta.referencia||'IT'}_${fecha_fn}.tex`; a.click();
   URL.revokeObjectURL(url);
-
-  document.getElementById('latex-download-wrap').style.display = 'none';
 }
 
 // ─── Enter en login ya está manejado arriba ───────────────────────
