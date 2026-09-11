@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Medidor de RPM | Análisis de Vibraciones</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Plotly.js CDN -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <!-- PapaParse CDN para lectura de CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+  <!-- Navbar -->
+  <header class="bg-slate-900 text-white shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div class="flex items-center gap-3">
+        <span class="text-3xl">⚙️</span>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">Tacómetro Digital por Vibración</h1>
+          <p class="text-xs text-slate-400">Análisis Espectral FFT para Medición de RPM de Equipos</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-900 text-emerald-300 border border-emerald-700">
+          GitHub Pages Ready (En Línea)
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+      <!-- Panel Lateral de Configuración -->
+      <div class="lg:col-span-1 bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <h2 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+          <span>🔧</span> Parámetros del Equipo
+        </h2>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">RPM Nominal de Placa</label>
+          <input type="number" id="rpmNominal" value="1750" step="50" min="1"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <p class="text-[11px] text-slate-500 mt-1">Frecuencia 1X esperada: <span id="fRotLabel" class="font-bold text-blue-600">29.17 Hz</span></p>
+        </div>
+
+        <div class="border-t border-slate-100 pt-3">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia Muestreo (Fs) [Hz]</label>
+          <input type="number" id="fsInput" value="11628" step="100" min="100"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia máxima visualización [Hz]</label>
+          <input type="number" id="freqplotInput" value="200" step="20" min="20"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Tolerancia armónicos (± Hz)</label>
+          <input type="number" id="toleranciaInput" value="1.0" step="0.1" min="0.1"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Sensibilidad de picos (% del máx)</label>
+          <input type="range" id="sensibilidadInput" value="10" min="2" max="50"
+            class="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+          <div class="flex justify-between text-[11px] text-slate-500">
+            <span>Alta</span>
+            <span id="sensibilidadVal" class="font-bold">10%</span>
+            <span>Baja</span>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-3">
+          <button id="btnDemo" class="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition border border-slate-300 flex items-center justify-center gap-1.5">
+            <span>🧪</span> Cargar Medición Demo (1750 RPM)
+          </button>
+        </div>
+      </div>
+
+      <!-- Área de Contenido y Resultados -->
+      <div class="lg:col-span-3 space-y-6">
+
+        <!-- Zona de carga de archivo -->
+        <div id="dropZone" class="border-2 border-dashed border-slate-300 hover:border-blue-500 bg-white p-6 rounded-xl text-center cursor-pointer transition">
+          <input type="file" id="fileInput" accept=".csv,.txt" class="hidden">
+          <div class="flex flex-col items-center justify-center gap-2">
+            <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p class="text-sm font-semibold text-slate-700">Arrastra aquí el archivo CSV entregado por el equipo</p>
+            <p class="text-xs text-slate-500">o haz clic para explorar tus archivos</p>
+          </div>
+          <p id="fileInfo" class="hidden mt-3 text-xs font-medium text-emerald-600 bg-emerald-50 py-1.5 px-3 rounded-lg inline-block"></p>
+        </div>
+
+        <!-- Tarjetas de Resultados (KPIs) -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-emerald-500 border border-slate-200 text-center">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">🎯 RPM Medida</div>
+            <div id="kpiRpmMedida" class="text-2xl sm:text-3xl font-bold text-emerald-600 my-1">--</div>
+            <div id="kpiFreqMedida" class="text-xs text-slate-500">Frec: -- Hz</div>
+          </div>
+
+          <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-blue-500 border border-slate-200 text-center">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">📋 RPM Nominal</div>
+            <div id="kpiRpmNominal" class="text-2xl sm:text-3xl font-bold text-blue-600 my-1">1750</div>
+            <div id="kpiDeltaRpm" class="text-xs text-slate-500">Desviación: --</div>
+          </div>
+
+          <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-cyan-500 border border-slate-200 text-center">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">📈 Amplitud 1X</div>
+            <div id="kpiAmp1x" class="text-2xl sm:text-3xl font-bold text-cyan-600 my-1">--</div>
+            <div class="text-xs text-slate-500">Pico fundamental</div>
+          </div>
+
+          <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-500 border border-slate-200 text-center">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">⚡ Vibración Global</div>
+            <div id="kpiRms" class="text-2xl sm:text-3xl font-bold text-amber-600 my-1">--</div>
+            <div class="text-xs text-slate-500">RMS [m/s²]</div>
+          </div>
+        </div>
+
+        <!-- Banner de Diagnóstico -->
+        <div id="statusBanner" class="hidden p-4 rounded-xl border text-sm font-medium"></div>
+
+        <!-- Gráfico del Espectro Plotly -->
+        <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-slate-200">
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+              <span>📈</span> Espectro de Frecuencia (FFT) y Armónicos
+            </h3>
+            <span class="text-xs text-slate-400">Interactivo: zoom y cursor</span>
+          </div>
+          <div id="spectrumPlot" class="w-full h-80 sm:h-96"></div>
+        </div>
+
+        <!-- Tabla de Armónicos y Diagnóstico -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+          <h3 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-1.5">
+            <span>🔍</span> Armónicos de Rotación (1X, 2X, 3X)
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-xs text-left">
+              <thead class="bg-slate-50 text-slate-500 font-semibold border-b">
+                <tr>
+                  <th class="py-2.5 px-3">Armónico</th>
+                  <th class="py-2.5 px-3">Frec. Esperada [Hz]</th>
+                  <th class="py-2.5 px-3">Frec. Medida [Hz]</th>
+                  <th class="py-2.5 px-3">Amplitud</th>
+                  <th class="py-2.5 px-3">RPM Equivalente</th>
+                  <th class="py-2.5 px-3">Estado</th>
+                </tr>
+              </thead>
+              <tbody id="tablaArmonicosBody" class="divide-y divide-slate-100">
+                <tr><td colspan="6" class="py-4 text-center text-slate-400">Carga un archivo para ver la detección de armónicos</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Variables globales de estado
+    let rawAcceleration = null;
+
+    // Elementos DOM
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const rpmNominalInput = document.getElementById('rpmNominal');
+    const fRotLabel = document.getElementById('fRotLabel');
+    const fsInput = document.getElementById('fsInput');
+    const freqplotInput = document.getElementById('freqplotInput');
+    const toleranciaInput = document.getElementById('toleranciaInput');
+    const sensibilidadInput = document.getElementById('sensibilidadInput');
+    const sensibilidadVal = document.getElementById('sensibilidadVal');
+    const btnDemo = document.getElementById('btnDemo');
+
+    // Actualización de labels
+    function updateFRot() {
+      const rpm = parseFloat(rpmNominalInput.value) || 0;
+      fRotLabel.textContent = (rpm / 60.0).toFixed(2) + ' Hz';
+      if (rawAcceleration) processData();
+    }
+    rpmNominalInput.addEventListener('input', updateFRot);
+    fsInput.addEventListener('input', () => { if (rawAcceleration) processData(); });
+    freqplotInput.addEventListener('input', () => { if (rawAcceleration) processData(); });
+    toleranciaInput.addEventListener('input', () => { if (rawAcceleration) processData(); });
+    sensibilidadInput.addEventListener('input', (e) => {
+      sensibilidadVal.textContent = e.target.value + '%';
+      if (rawAcceleration) processData();
+    });
+
+    // Gestión de drag and drop
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-blue-500', 'bg-blue-50'); });
+    dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('border-blue-500', 'bg-blue-50'); });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+      if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    });
+
+    // Cargar Demo sintética
+    btnDemo.addEventListener('click', () => {
+      const fs = parseFloat(fsInput.value) || 11628;
+      const L = 20000;
+      const f_real = 1748.5 / 60.0;
+      const demoData = new Float64Array(L);
+      for (let i = 0; i < L; i++) {
+        const t = i / fs;
+        demoData[i] = 0.45 * Math.sin(2 * Math.PI * f_real * t)
+                    + 0.18 * Math.sin(2 * Math.PI * 2 * f_real * t)
+                    + 0.08 * Math.sin(2 * Math.PI * 3 * f_real * t)
+                    + 0.05 * (Math.random() - 0.5);
+      }
+      fileInfo.textContent = `Archivo cargado: Demo_Sintetico_1750RPM.csv (${L.toLocaleString()} muestras)`;
+      fileInfo.classList.remove('hidden');
+      rawAcceleration = demoData;
+      processData();
+    });
+
+    // Lectura de archivo CSV
+    function handleFile(file) {
+      Papa.parse(file, {
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          if (!results.data || results.data.length === 0) {
+            alert("El archivo CSV está vacío.");
+            return;
+          }
+          let colIdx = 0;
+          let startRow = 0;
+          if (isNaN(Number(results.data[0][0]))) startRow = 1;
+          
+          const data = [];
+          for (let i = startRow; i < results.data.length; i++) {
+            const val = parseFloat(results.data[i][colIdx]);
+            if (!isNaN(val)) data.push(val);
+          }
+          
+          if (data.length < 10) {
+            alert("No se encontraron suficientes datos numéricos en la primera columna.");
+            return;
+          }
+
+          fileInfo.textContent = `Archivo cargado: ${file.name} (${data.length.toLocaleString()} muestras)`;
+          fileInfo.classList.remove('hidden');
+          rawAcceleration = new Float64Array(data);
+          processData();
+        }
+      });
+    }
+
+    // FFT Cooley-Tukey Radix-2
+    function nextPowerOfTwo(n) {
+      let p = 1;
+      while (p < n) p <<= 1;
+      return p;
+    }
+
+    function fftRadix2(real, imag) {
+      const n = real.length;
+      let j = 0;
+      for (let i = 0; i < n - 1; i++) {
+        if (i < j) {
+          let tempR = real[i]; real[i] = real[j]; real[j] = tempR;
+          let tempI = imag[i]; imag[i] = imag[j]; imag[j] = tempI;
+        }
+        let k = n >> 1;
+        while (k <= j) {
+          j -= k;
+          k >>= 1;
+        }
+        j += k;
+      }
+      for (let l = 2; l <= n; l <<= 1) {
+        const halfL = l >> 1;
+        const theta = -2 * Math.PI / l;
+        const wStepR = Math.cos(theta);
+        const wStepI = Math.sin(theta);
+        for (let i = 0; i < n; i += l) {
+          let wR = 1.0;
+          let wI = 0.0;
+          for (let m = 0; m < halfL; m++) {
+            const idx1 = i + m;
+            const idx2 = idx1 + halfL;
+            const uR = real[idx1];
+            const uI = imag[idx1];
+            const tR = wR * real[idx2] - wI * imag[idx2];
+            const tI = wR * imag[idx2] + wI * real[idx2];
+            real[idx1] = uR + tR;
+            imag[idx1] = uI + tI;
+            real[idx2] = uR - tR;
+            imag[idx2] = uI - tI;
+            const nextWR = wR * wStepR - wI * wStepI;
+            wI = wR * wStepI + wI * wStepR;
+            wR = nextWR;
+          }
+        }
+      }
+    }
+
+    // Procesamiento y cálculo
+    function processData() {
+      if (!rawAcceleration || rawAcceleration.length === 0) return;
+
+      const fs = parseFloat(fsInput.value) || 11628;
+      const rpmNominal = parseFloat(rpmNominalInput.value) || 1750;
+      const fRot = rpmNominal / 60.0;
+      const freqplot = parseFloat(freqplotInput.value) || 200;
+      const tolHz = parseFloat(toleranciaInput.value) || 1.0;
+      const sensPct = (parseFloat(sensibilidadInput.value) || 10) / 100.0;
+
+      const L = rawAcceleration.length;
+
+      // 1. RMS
+      let sum = 0;
+      for (let i = 0; i < L; i++) sum += rawAcceleration[i];
+      const mean = sum / L;
+      let sumSqDiff = 0;
+      for (let i = 0; i < L; i++) sumSqDiff += (rawAcceleration[i] - mean) ** 2;
+      const rms = Math.sqrt(sumSqDiff / (L - 1));
+
+      // 2. FFT
+      const NFFT = nextPowerOfTwo(L);
+      const real = new Float64Array(NFFT);
+      const imag = new Float64Array(NFFT);
+      for (let i = 0; i < L; i++) real[i] = rawAcceleration[i];
+
+      fftRadix2(real, imag);
+
+      const halfN = NFFT / 2;
+      const fPlot = [];
+      const spectrumPlot = [];
+      let maxAmp = 0;
+
+      for (let i = 0; i <= halfN; i++) {
+        const f = (fs / 2) * (i / halfN);
+        if (f > freqplot) break;
+        const mag = (2 * Math.sqrt(real[i] * real[i] + imag[i] * imag[i])) / L;
+        fPlot.push(f);
+        spectrumPlot.push(mag);
+        if (mag > maxAmp) maxAmp = mag;
+      }
+
+      // 3. Detección de picos
+      const minPeakHeight = maxAmp * sensPct;
+      const peaksF = [];
+      const peaksA = [];
+
+      for (let i = 1; i < spectrumPlot.length - 1; i++) {
+        if (spectrumPlot[i] > spectrumPlot[i - 1] && spectrumPlot[i] > spectrumPlot[i + 1]) {
+          if (spectrumPlot[i] >= minPeakHeight) {
+            peaksF.push(fPlot[i]);
+            peaksA.push(spectrumPlot[i]);
+          }
+        }
+      }
+
+      // 4. Buscar 1X, 2X, 3X
+      const picosTabla = peaksF.map((f, i) => ({ f, amp: peaksA[i] })).sort((a, b) => b.amp - a.amp);
+      
+      let picos1X = picosTabla.filter(p => Math.abs(p.f - fRot) <= tolHz);
+      let best1X = picos1X.length > 0 ? picos1X[0] : null;
+
+      // Actualizar KPIs
+      document.getElementById('kpiRpmNominal').textContent = rpmNominal.toFixed(0);
+      document.getElementById('kpiRms').textContent = rms.toFixed(4);
+
+      const statusBanner = document.getElementById('statusBanner');
+      statusBanner.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200', 'bg-amber-50', 'text-amber-800', 'border-amber-200');
+
+      if (best1X) {
+        const rpmMedida = best1X.f * 60.0;
+        const deltaPct = ((rpmMedida - rpmNominal) / rpmNominal) * 100.0;
+        document.getElementById('kpiRpmMedida').textContent = rpmMedida.toFixed(1);
+        document.getElementById('kpiFreqMedida').textContent = `Frec: ${best1X.f.toFixed(2)} Hz`;
+        document.getElementById('kpiDeltaRpm').textContent = `Desv: ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(2)}%`;
+        document.getElementById('kpiAmp1x').textContent = best1X.amp.toFixed(4);
+
+        statusBanner.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+        statusBanner.innerHTML = `✅ <strong>Medición Exitosa:</strong> Rotación real detectada en <strong>${rpmMedida.toFixed(1)} RPM</strong> (${best1X.f.toFixed(2)} Hz). Desviación de solo ${Math.abs(rpmMedida - rpmNominal).toFixed(1)} RPM frente a la nominal.`;
+      } else {
+        document.getElementById('kpiRpmMedida').textContent = 'No detectado';
+        document.getElementById('kpiFreqMedida').textContent = `Fuera de ±${tolHz} Hz`;
+        document.getElementById('kpiDeltaRpm').textContent = '--';
+        document.getElementById('kpiAmp1x').textContent = '--';
+
+        statusBanner.classList.add('bg-amber-50', 'text-amber-800', 'border-amber-200');
+        statusBanner.innerHTML = `⚠️ <strong>Atención:</strong> No se encontró un pico cercano a ${fRot.toFixed(2)} Hz (±${tolHz} Hz). Ajusta la RPM nominal o la tolerancia si el equipo está fuera de velocidad.`;
+      }
+
+      // Tabla de Armónicos
+      const tablaBody = document.getElementById('tablaArmonicosBody');
+      tablaBody.innerHTML = '';
+      const colores = ['#10b981', '#f59e0b', '#8b5cf6'];
+
+      const vlines = [];
+      for (let n = 1; n <= 3; n++) {
+        const fEsperada = fRot * n;
+        if (fEsperada <= freqplot) {
+          vlines.push({
+            type: 'line',
+            x0: fEsperada, x1: fEsperada,
+            y0: 0, y1: maxAmp * 1.05,
+            line: { color: colores[n - 1], width: 1.5, dash: 'dash' }
+          });
+        }
+        const cercanos = picosTabla.filter(p => Math.abs(p.f - fEsperada) <= tolHz);
+        const tr = document.createElement('tr');
+        if (cercanos.length > 0) {
+          const match = cercanos[0];
+          tr.innerHTML = `
+            <td class="py-2 px-3 font-semibold text-slate-700">${n}X</td>
+            <td class="py-2 px-3">${fEsperada.toFixed(2)}</td>
+            <td class="py-2 px-3 font-bold text-slate-800">${match.f.toFixed(2)}</td>
+            <td class="py-2 px-3">${match.amp.toFixed(4)}</td>
+            <td class="py-2 px-3 font-semibold text-blue-600">${(match.f * 60 / n).toFixed(1)}</td>
+            <td class="py-2 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">Detectado</span></td>
+          `;
+        } else {
+          tr.innerHTML = `
+            <td class="py-2 px-3 font-semibold text-slate-700">${n}X</td>
+            <td class="py-2 px-3">${fEsperada.toFixed(2)}</td>
+            <td class="py-2 px-3 text-slate-400">--</td>
+            <td class="py-2 px-3 text-slate-400">--</td>
+            <td class="py-2 px-3 text-slate-400">--</td>
+            <td class="py-2 px-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500">No detectado</span></td>
+          `;
+        }
+        tablaBody.appendChild(tr);
+      }
+
+      // 5. Gráfico Plotly
+      const traceFFT = {
+        x: fPlot, y: spectrumPlot,
+        mode: 'lines',
+        name: 'Espectro FFT',
+        line: { color: '#2563eb', width: 1.5 },
+        hovertemplate: 'Frec: %{x:.2f} Hz<br>Amp: %{y:.4f}<extra></extra>'
+      };
+
+      const tracePeaks = {
+        x: peaksF, y: peaksA,
+        mode: 'markers+text',
+        name: 'Picos',
+        marker: { color: '#ef4444', size: 6, symbol: 'x' },
+        text: peaksF.map(f => f.toFixed(1) + ' Hz'),
+        textposition: 'top center',
+        textfont: { size: 9 },
+        hovertemplate: 'Pico: %{x:.2f} Hz<br>Amp: %{y:.4f}<extra></extra>'
+      };
+
+      const layout = {
+        margin: { l: 45, r: 20, t: 25, b: 35 },
+        xaxis: { title: 'Frecuencia [Hz]', range: [0, freqplot] },
+        yaxis: { title: 'Amplitud [m/s²]' },
+        shapes: vlines,
+        hovermode: 'closest',
+        showlegend: true,
+        legend: { orientation: 'h', x: 1, y: 1.05, xanchor: 'right' }
+      };
+
+      Plotly.newPlot('spectrumPlot', [traceFFT, tracePeaks], layout, { responsive: true, displaylogo: false });
+    }
+  </script>
+</body>
+</html>
